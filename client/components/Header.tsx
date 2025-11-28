@@ -6,7 +6,7 @@ import { Menu, X, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Header() {
-  const { isAuthenticated, isAdmin, isCandidate, user, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isSuperAdmin, isCandidate, user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -15,6 +15,25 @@ export function Header() {
     logout();
     navigate('/');
     setUserMenuOpen(false);
+  };
+
+  const getAccountType = () => {
+    if (isSuperAdmin) return 'SuperAdmin';
+    if (isAdmin) return 'Admin';
+    if (isCandidate) return 'Candidate';
+    return 'User';
+  };
+
+  const getDashboardLink = () => {
+    if (isSuperAdmin) return '/admin/super-dashboard';
+    if (isAdmin) return '/admin/dashboard';
+    return '/profile';
+  };
+
+  const getDashboardLabel = () => {
+    if (isSuperAdmin) return 'Super Admin';
+    if (isAdmin) return 'Admin';
+    return 'My Profile';
   };
 
   return (
@@ -42,10 +61,37 @@ export function Header() {
                 My Profile
               </Link>
             )}
-            {isAdmin && (
-              <Link to="/admin/dashboard" className="text-foreground hover:text-primary transition-colors font-medium">
-                Admin
-              </Link>
+            {(isAdmin || isSuperAdmin) && (
+              <div className="relative group">
+                <button className="text-foreground hover:text-primary transition-colors font-medium flex items-center gap-1">
+                  Admin
+                  <ChevronDown size={14} />
+                </button>
+                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <Link
+                    to="/admin/dashboard"
+                    className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                  >
+                    Admin Dashboard
+                  </Link>
+                  {isSuperAdmin && (
+                    <Link
+                      to="/admin/super-dashboard"
+                      className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                    >
+                      Super Admin Dashboard
+                    </Link>
+                  )}
+                  {isSuperAdmin && (
+                    <Link
+                      to="/admin/users"
+                      className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                    >
+                      User Management
+                    </Link>
+                  )}
+                </div>
+              </div>
             )}
           </nav>
 
@@ -69,15 +115,65 @@ export function Header() {
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border border-border rounded-lg shadow-lg py-2 animate-fade-in">
                     <div className="px-4 py-2 border-b border-border text-xs text-muted-foreground">
-                      {isAdmin ? 'Admin Account' : 'Candidate Account'}
+                      {getAccountType()} Account
                     </div>
                     <Link
-                      to={isAdmin ? "/admin/dashboard" : "/profile"}
+                      to={getDashboardLink()}
                       className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
                       onClick={() => setUserMenuOpen(false)}
                     >
-                      {isAdmin ? 'Dashboard' : 'My Profile'}
+                      {getDashboardLabel()}
                     </Link>
+                    {(isAdmin || isSuperAdmin) && (
+                      <>
+                        {isSuperAdmin && (
+                          <>
+                            <Link
+                              to="/admin/users"
+                              className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              User Management
+                            </Link>
+                            <Link
+                              to="/admin/stats"
+                              className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              System Statistics
+                            </Link>
+                            <Link
+                              to="/admin/audit-log"
+                              className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              Audit Log
+                            </Link>
+                            <Link
+                              to="/admin/config"
+                              className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              System Config
+                            </Link>
+                            <Link
+                              to="/admin/export"
+                              className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                              onClick={() => setUserMenuOpen(false)}
+                            >
+                              Data Export
+                            </Link>
+                          </>
+                        )}
+                        <Link
+                          to="/admin/create-job"
+                          className="block px-4 py-2 text-sm hover:bg-secondary transition-colors"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          Create Job
+                        </Link>
+                      </>
+                    )}
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors text-destructive"
@@ -138,14 +234,72 @@ export function Header() {
                 My Profile
               </Link>
             )}
-            {isAdmin && (
-              <Link
-                to="/admin/dashboard"
-                className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Admin Dashboard
-              </Link>
+            {(isAdmin || isSuperAdmin) && (
+              <div className="border-t border-border pt-2">
+                <div className="px-4 py-2 text-sm text-muted-foreground mb-2">
+                  Admin Menu
+                </div>
+                <Link
+                  to="/admin/dashboard"
+                  className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Admin Dashboard
+                </Link>
+                {isSuperAdmin && (
+                  <>
+                    <Link
+                      to="/admin/super-dashboard"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Super Admin Dashboard
+                    </Link>
+                    <Link
+                      to="/admin/users"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      User Management
+                    </Link>
+                    <Link
+                      to="/admin/stats"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      System Statistics
+                    </Link>
+                    <Link
+                      to="/admin/audit-log"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Audit Log
+                    </Link>
+                    <Link
+                      to="/admin/config"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      System Config
+                    </Link>
+                    <Link
+                      to="/admin/export"
+                      className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Data Export
+                    </Link>
+                  </>
+                )}
+                <Link
+                  to="/admin/create-job"
+                  className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Create Job
+                </Link>
+              </div>
             )}
 
             {!isAuthenticated && (

@@ -410,39 +410,82 @@ export const adminApi = {
   async getUsers(
     page = 1,
     limit = 10,
-    search?: string
+    search?: string,
+    role_id?: number,
+    is_active?: boolean
   ): Promise<PaginatedResponse<User>> {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
       ...(search && { search }),
+      ...(role_id && { role_id: role_id.toString() }),
+      ...(is_active !== undefined && { is_active: is_active.toString() }),
     });
 
     return authenticatedRequest<PaginatedResponse<User>>(`/admin/users?${params}`);
   },
 
-  // Deactivate user (SuperAdmin only)
-  async deactivateUser(userId: number): Promise<void> {
-    return authenticatedRequest(`/admin/users/${userId}/deactivate`, {
+  // Update user status (activate/deactivate)
+  async updateUserStatus(userId: number, is_active: boolean): Promise<void> {
+    return authenticatedRequest(`/admin/users/${userId}/status`, {
       method: 'PUT',
+      body: JSON.stringify({ is_active }),
     });
   },
 
-  // Activate user (SuperAdmin only)
-  async activateUser(userId: number): Promise<void> {
-    return authenticatedRequest(`/admin/users/${userId}/activate`, {
+  // Update user role
+  async updateUserRole(userId: number, role_id: number): Promise<void> {
+    return authenticatedRequest(`/admin/users/${userId}/role`, {
       method: 'PUT',
+      body: JSON.stringify({ role_id }),
     });
   },
 
-  // Get system statistics (SuperAdmin only)
+  // Get system statistics
   async getSystemStats(): Promise<{
-    users: { total: number; active: number; candidates: number; managers: number; admins: number };
-    jobs: { total: number; published: number; draft: number; closed: number };
-    applications: { total: number; pending: number; approved: number; rejected: number };
-    skills: { total: number; approved: number; pending: number };
+    users: Array<{ role: string; count: number; active_count: number }>;
+    jobs: Array<{ status: string; count: number }>;
+    applications: Array<{ status: string; count: number }>;
+    recentActivity: { new_users: number; new_jobs: number; new_applications: number };
   }> {
     return authenticatedRequest('/admin/stats');
+  },
+
+  // Get system configuration
+  async getSystemConfig(): Promise<{
+    database: { version: string; connection: string };
+    server: { time: string; uptime: number };
+    features: { [key: string]: boolean };
+  }> {
+    return authenticatedRequest('/admin/config');
+  },
+
+  // Get audit log
+  async getAuditLog(
+    page = 1,
+    limit = 50,
+    filters?: {
+      action?: string;
+      user_id?: number;
+      start_date?: string;
+      end_date?: string;
+    }
+  ): Promise<PaginatedResponse<any>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...Object.fromEntries(
+        Object.entries(filters || {}).filter(([_, value]) => value !== undefined && value !== '')
+      ),
+    });
+
+    return authenticatedRequest(`/admin/audit-log?${params}`);
+  },
+
+  // Export data
+  async exportData(type: 'users' | 'jobs' | 'applications'): Promise<{ data: any[] }> {
+    const params = new URLSearchParams({ type });
+    return authenticatedRequest(`/admin/export?${params}`);
   },
 };
 

@@ -151,6 +151,7 @@ export const useAuth = () => {
     clearError,
     isAuthenticated: !!state.user,
     isAdmin: state.user?.role?.name === 'SuperAdmin' || state.user?.role?.name === 'HiringManager',
+    isSuperAdmin: state.user?.role?.name === 'SuperAdmin',
     isCandidate: state.user?.role?.name === 'Candidate',
   };
 };

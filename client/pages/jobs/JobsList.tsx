@@ -23,7 +23,7 @@ export default function JobsList() {
     const loadJobs = async () => {
       try {
         setLoading(true);
-        const response = await jobsApi.getJobs();
+        const response = await jobsApi.getJobs(1, 100);
         setJobs(response.data);
         setFilteredJobs(response.data);
       } catch (error) {

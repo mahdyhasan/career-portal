@@ -4,7 +4,16 @@ import cors from "cors";
 import { handleDemo } from "./routes/demo";
 import { handleLogin, handleSignup, handleSocialLogin, handleValidateToken, handleRefreshToken } from "./routes/auth";
 import { handleGetJobs, handleGetJob, handleCreateJob, handleUpdateJob, handleDeleteJob, handleGetJobStats } from "./routes/jobs";
-import { authenticateToken, optionalAuth } from "./middleware/auth";
+import { 
+  handleGetUsers, 
+  handleUpdateUserStatus, 
+  handleUpdateUserRole, 
+  handleGetSystemStats, 
+  handleGetSystemConfig, 
+  handleGetAuditLog, 
+  handleExportData 
+} from "./routes/admin";
+import { authenticateToken, optionalAuth, requireRole } from "./middleware/auth";
 import { testConnection } from "./config/database";
 
 export function createServer() {
@@ -40,6 +49,15 @@ export function createServer() {
   app.put("/api/jobs/:id", authenticateToken, handleUpdateJob);
   app.delete("/api/jobs/:id", authenticateToken, handleDeleteJob);
   app.get("/api/jobs/stats", authenticateToken, handleGetJobStats);
+
+  // Super Admin routes
+  app.get("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleGetUsers);
+  app.put("/api/admin/users/:id/status", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserStatus);
+  app.put("/api/admin/users/:id/role", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserRole);
+  app.get("/api/admin/stats", authenticateToken, requireRole(['SuperAdmin']), handleGetSystemStats);
+  app.get("/api/admin/config", authenticateToken, requireRole(['SuperAdmin']), handleGetSystemConfig);
+  app.get("/api/admin/audit-log", authenticateToken, requireRole(['SuperAdmin']), handleGetAuditLog);
+  app.get("/api/admin/export", authenticateToken, requireRole(['SuperAdmin']), handleExportData);
 
   return app;
 }

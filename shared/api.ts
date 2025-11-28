@@ -1,3 +1,5 @@
+import { ReactNode } from 'react';
+
 /**
  * Shared types between client and server
  * Used for type-safe API communication and data models
@@ -96,6 +98,9 @@ export interface User {
   updated_at: string;
   deleted_at?: string;
   role?: Role;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
 }
 
 export interface CandidateProfile {

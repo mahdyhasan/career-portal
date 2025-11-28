@@ -19,6 +19,12 @@ import CandidateProfile from "./pages/candidate/Profile";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminCreateJob from "./pages/admin/CreateJob";
 import AdminCandidateManagement from "./pages/admin/CandidateManagement";
+import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
+import UserManagement from "./pages/admin/UserManagement";
+import AuditLog from "./pages/admin/AuditLog";
+import SystemConfig from "./pages/admin/SystemConfig";
+import DataExport from "./pages/admin/DataExport";
+import SystemStats from "./pages/admin/SystemStats";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +52,14 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/create-job" element={<AdminCreateJob />} />
           <Route path="/admin/candidates" element={<AdminCandidateManagement />} />
+          
+          {/* Super Admin Routes */}
+          <Route path="/admin/super-dashboard" element={<SuperAdminDashboard />} />
+          <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/audit-log" element={<AuditLog />} />
+          <Route path="/admin/config" element={<SystemConfig />} />
+          <Route path="/admin/export" element={<DataExport />} />
+          <Route path="/admin/stats" element={<SystemStats />} />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
