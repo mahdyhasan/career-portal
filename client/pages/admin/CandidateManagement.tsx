@@ -128,7 +128,7 @@ export default function CandidateManagement() {
   }
 
   return (
-    <ProtectedRoute requireRole="admin">
+    <ProtectedRoute requireRole="HiringManager">
       <Layout>
         <div className="py-12 px-4">
           <div className="container mx-auto max-w-6xl">

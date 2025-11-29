@@ -170,6 +170,10 @@ export interface Job {
 }
 
 export interface JobFormField {
+  order: any;
+  type: string;
+  placeholder: string;
+  required: boolean;
   id: number;
   job_id: number;
   input_type_id: number;

@@ -136,7 +136,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <ProtectedRoute requireRole="candidate">
+      <ProtectedRoute requireRole="Candidate">
         <Layout>
           <div className="py-12 px-4">
             <div className="container mx-auto text-center">
@@ -150,7 +150,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <ProtectedRoute requireRole="candidate">
+    <ProtectedRoute requireRole="Candidate">
       <Layout>
         <div className="py-12 px-4">
           <div className="container mx-auto max-w-6xl">

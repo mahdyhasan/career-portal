@@ -1,418 +1,360 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Layout } from '@/components/Layout';
-import SuperAdminNav from '@/components/admin/SuperAdminNav';
+import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { adminApi } from '@/services/api';
-import { User } from '@shared/api';
+import { Badge } from '@/components/ui/badge';
 import { 
   Users, 
   Briefcase, 
   FileText, 
-  Activity, 
-  Settings, 
-  Download,
+  Activity,
   TrendingUp,
-  UserCheck,
-  UserX,
+  AlertCircle,
+  Settings,
+  Download,
   Eye,
-  Shield,
-  Database,
-  Clock,
-  ChevronRight
+  Plus,
+  BarChart3,
+  Shield
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-interface SystemStats {
+interface DashboardStats {
   users: Array<{ role: string; count: number; active_count: number }>;
   jobs: Array<{ status: string; count: number }>;
   applications: Array<{ status: string; count: number }>;
   recentActivity: { new_users: number; new_jobs: number; new_applications: number };
 }
 
-interface SystemConfig {
-  database: { version: string; connection: string };
-  server: { time: string; uptime: number };
-  features: { [key: string]: boolean };
-}
-
 export default function SuperAdminDashboard() {
-  const navigate = useNavigate();
-  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
-  const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null);
-  const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        const [statsResponse, configResponse, usersResponse] = await Promise.all([
-          adminApi.getSystemStats(),
-          adminApi.getSystemConfig(),
-          adminApi.getUsers(1, 5)
-        ]);
-
-        setSystemStats(statsResponse);
-        setSystemConfig(configResponse);
-        setRecentUsers(usersResponse.data);
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadDashboardData();
+    loadDashboardStats();
   }, []);
 
-  const getUserRoleStats = () => {
-    if (!systemStats?.users) return [];
-    return systemStats.users.map(stat => ({
-      role: stat.role,
-      total: stat.count,
-      active: stat.active_count,
-      inactive: stat.count - stat.active_count
-    }));
-  };
-
-  const getJobStats = () => {
-    if (!systemStats?.jobs) return [];
-    return systemStats.jobs.map(stat => ({
-      status: stat.status,
-      count: stat.count
-    }));
-  };
-
-  const getApplicationStats = () => {
-    if (!systemStats?.applications) return [];
-    return systemStats.applications.map(stat => ({
-      status: stat.status,
-      count: stat.count
-    }));
-  };
-
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    
-    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
-
-  const handleExportData = async (type: 'users' | 'jobs' | 'applications') => {
+  const loadDashboardStats = async () => {
     try {
-      const response = await adminApi.exportData(type);
-      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${type}-export-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      setLoading(true);
+      // Mock data for now - will be replaced with actual API call
+      const mockStats: DashboardStats = {
+        users: [
+          { role: 'SuperAdmin', count: 1, active_count: 1 },
+          { role: 'Admin', count: 3, active_count: 2 },
+          { role: 'HiringManager', count: 15, active_count: 12 },
+          { role: 'Candidate', count: 248, active_count: 189 }
+        ],
+        jobs: [
+          { status: 'Published', count: 45 },
+          { status: 'Draft', count: 12 },
+          { status: 'Closed', count: 23 }
+        ],
+        applications: [
+          { status: 'Applied', count: 156 },
+          { status: 'Under Review', count: 89 },
+          { status: 'Interview', count: 34 },
+          { status: 'Offer', count: 12 },
+          { status: 'Rejected', count: 78 }
+        ],
+        recentActivity: {
+          new_users: 23,
+          new_jobs: 8,
+          new_applications: 45
+        }
+      };
+      setStats(mockStats);
     } catch (error) {
-      console.error('Failed to export data:', error);
+      console.error('Failed to load dashboard stats:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const quickActions = [
-    {
-      icon: Users,
-      label: 'Manage Users',
-      description: 'View and manage all system users',
-      onClick: () => navigate('/admin/users'),
-      color: 'bg-blue-100 text-blue-600'
-    },
-    {
-      icon: Briefcase,
-      label: 'Job Management',
-      description: 'Manage job postings and applications',
-      onClick: () => navigate('/admin/jobs'),
-      color: 'bg-green-100 text-green-600'
-    },
-    {
-      icon: FileText,
-      label: 'Application Review',
-      description: 'Review and process applications',
-      onClick: () => navigate('/admin/applications'),
-      color: 'bg-purple-100 text-purple-600'
-    },
-    {
-      icon: Activity,
-      label: 'Audit Log',
-      description: 'View system activity and changes',
-      onClick: () => navigate('/admin/audit-log'),
-      color: 'bg-orange-100 text-orange-600'
-    },
-    {
-      icon: Settings,
-      label: 'System Config',
-      description: 'Configure system settings',
-      onClick: () => navigate('/admin/config'),
-      color: 'bg-gray-100 text-gray-600'
-    },
-    {
-      icon: Database,
-      label: 'Data Export',
-      description: 'Export system data',
-      onClick: () => navigate('/admin/export'),
-      color: 'bg-indigo-100 text-indigo-600'
-    }
-  ];
+  const totalUsers = stats?.users.reduce((sum, user) => sum + user.count, 0) || 0;
+  const activeUsers = stats?.users.reduce((sum, user) => sum + user.active_count, 0) || 0;
+  const totalJobs = stats?.jobs.reduce((sum, job) => sum + job.count, 0) || 0;
+  const totalApplications = stats?.applications.reduce((sum, app) => sum + app.count, 0) || 0;
 
   if (loading) {
     return (
-      <ProtectedRoute requireRole="SuperAdmin">
-        <div className="flex">
-          <SuperAdminNav />
-          <div className="flex-1">
-            <div className="flex items-center justify-center min-h-screen">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <SuperAdminLayout>
+        <div className="py-8 px-4">
+          <div className="container mx-auto">
+            <div className="animate-pulse">
+              <div className="h-8 bg-muted rounded w-64 mb-8"></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-muted h-32 rounded-lg"></div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </ProtectedRoute>
+      </SuperAdminLayout>
     );
   }
 
   return (
-    <ProtectedRoute requireRole="SuperAdmin">
-      <div className="flex">
-        <SuperAdminNav />
-        <div className="flex-1">
-          <div className="py-8 px-4">
-            <div className="container mx-auto max-w-7xl">
-              {/* Page Header */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <Shield className="h-8 w-8 text-primary" />
-                  <h1 className="text-3xl font-bold text-foreground">Super Admin Dashboard</h1>
-                </div>
-                <p className="text-muted-foreground text-lg">
-                  Complete system administration and management
+    <SuperAdminLayout>
+      <div className="py-8 px-4">
+        <div className="container mx-auto">
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">
+                  Super Admin Dashboard
+                </h1>
+                <p className="text-muted-foreground">
+                  Manage entire career portal system
                 </p>
               </div>
-
-              {/* System Status */}
-              {systemConfig && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-white border border-border rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Database className="h-5 w-5 text-green-600" />
-                      <h3 className="font-semibold text-foreground">Database</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      MySQL {systemConfig.database.version}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm text-green-600">Connected</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white border border-border rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <Clock className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-semibold text-foreground">Server Uptime</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {formatUptime(systemConfig.server.uptime)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(systemConfig.server.time).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="bg-white border border-border rounded-xl p-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <TrendingUp className="h-5 w-5 text-purple-600" />
-                      <h3 className="font-semibold text-foreground">Recent Activity</h3>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">
-                        {systemStats?.recentActivity.new_users || 0} new users
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {systemStats?.recentActivity.new_jobs || 0} new jobs
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {systemStats?.recentActivity.new_applications || 0} new applications
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Statistics Overview */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                {/* User Statistics */}
-                <div className="bg-white border border-border rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">User Statistics</h3>
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-3">
-                    {getUserRoleStats().map((stat) => (
-                      <div key={stat.role} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{stat.role}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{stat.total}</span>
-                          <div className="flex items-center gap-1">
-                            <UserCheck className="h-3 w-3 text-green-500" />
-                            <span className="text-xs text-green-600">{stat.active}</span>
-                          </div>
-                          {stat.inactive > 0 && (
-                            <div className="flex items-center gap-1">
-                              <UserX className="h-3 w-3 text-red-500" />
-                              <span className="text-xs text-red-600">{stat.inactive}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Job Statistics */}
-                <div className="bg-white border border-border rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">Job Statistics</h3>
-                    <Briefcase className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-3">
-                    {getJobStats().map((stat) => (
-                      <div key={stat.status} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{stat.status}</span>
-                        <span className="text-sm font-medium">{stat.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Application Statistics */}
-                <div className="bg-white border border-border rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">Application Statistics</h3>
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-3">
-                    {getApplicationStats().map((stat) => (
-                      <div key={stat.status} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{stat.status}</span>
-                        <span className="text-sm font-medium">{stat.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="mb-8">
-                <h2 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {quickActions.map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.label}
-                        onClick={action.onClick}
-                        className="bg-white border border-border rounded-xl p-6 text-left hover:shadow-md transition-shadow group"
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className={`p-3 rounded-lg ${action.color} group-hover:scale-105 transition-transform`}>
-                            <Icon className="h-6 w-6" />
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-                              {action.label}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {action.description}
-                            </p>
-                          </div>
-                          <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Recent Users */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white border border-border rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">Recent Users</h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate('/admin/users')}
-                    >
-                      View All
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                  <div className="space-y-3">
-                    {recentUsers.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg">
-                        <div>
-                          <p className="font-medium text-foreground">{user.email}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {user.role?.name} • Joined {new Date(user.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {user.is_active ? (
-                            <UserCheck className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <UserX className="h-4 w-4 text-red-500" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {recentUsers.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">No recent users</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Data Export Options */}
-                <div className="bg-white border border-border rounded-xl p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Download className="h-5 w-5 text-primary" />
-                    <h3 className="font-semibold text-foreground">Data Export</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {[
-                      { type: 'users' as const, label: 'Export All Users', description: 'Download user data as JSON' },
-                      { type: 'jobs' as const, label: 'Export All Jobs', description: 'Download job postings data' },
-                      { type: 'applications' as const, label: 'Export All Applications', description: 'Download application data' }
-                    ].map((exportOption) => (
-                      <button
-                        key={exportOption.type}
-                        onClick={() => handleExportData(exportOption.type)}
-                        className="w-full text-left p-3 border border-border rounded-lg hover:bg-secondary/50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-foreground">{exportOption.label}</p>
-                            <p className="text-sm text-muted-foreground">{exportOption.description}</p>
-                          </div>
-                          <Download className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="secondary" className="px-3 py-1">
+                  <Shield size={14} className="mr-1" />
+                  Super Admin
+                </Badge>
               </div>
             </div>
           </div>
+
+          <div className="mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Quick Actions</CardTitle>
+                <CardDescription>
+                  Common administrative tasks
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-start gap-2"
+                    onClick={() => navigate('/admin/users')}
+                  >
+                    <Users className="h-5 w-5" />
+                    <span className="font-medium">Manage Users</span>
+                    <span className="text-xs text-muted-foreground">Add, edit, deactivate users</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-start gap-2"
+                    onClick={() => navigate('/admin/jobs')}
+                  >
+                    <Briefcase className="h-5 w-5" />
+                    <span className="font-medium">Job Management</span>
+                    <span className="text-xs text-muted-foreground">Review and manage all jobs</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-start gap-2"
+                    onClick={() => navigate('/admin/applications')}
+                  >
+                    <FileText className="h-5 w-5" />
+                    <span className="font-medium">Applications</span>
+                    <span className="text-xs text-muted-foreground">Review all applications</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-start gap-2"
+                    onClick={() => navigate('/admin/system')}
+                  >
+                    <Settings className="h-5 w-5" />
+                    <span className="font-medium">System Settings</span>
+                    <span className="text-xs text-muted-foreground">Configure system</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalUsers}</div>
+                <p className="text-xs text-muted-foreground">
+                  {activeUsers} active users
+                </p>
+                <div className="mt-2">
+                  <Badge variant="secondary" className="text-xs">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    +{stats?.recentActivity.new_users} this week
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Jobs</CardTitle>
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalJobs}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats?.jobs.find(j => j.status === 'Published')?.count || 0} published
+                </p>
+                <div className="mt-2">
+                  <Badge variant="secondary" className="text-xs">
+                    <Plus className="h-3 w-3 mr-1" />
+                    +{stats?.recentActivity.new_jobs} this week
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Applications</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalApplications}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats?.applications.find(a => a.status === 'Under Review')?.count || 0} under review
+                </p>
+                <div className="mt-2">
+                  <Badge variant="secondary" className="text-xs">
+                    <Activity className="h-3 w-3 mr-1" />
+                    +{stats?.recentActivity.new_applications} this week
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">System Health</CardTitle>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">Good</div>
+                <p className="text-xs text-muted-foreground">
+                  All systems operational
+                </p>
+                <div className="mt-2">
+                  <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">
+                    <Eye className="h-3 w-3 mr-1" />
+                    Monitoring Active
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>User Distribution</CardTitle>
+                <CardDescription>Users by role and status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.users.map((userStat) => (
+                    <div key={userStat.role} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-primary rounded-full"></div>
+                        <span className="text-sm font-medium">{userStat.role}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          {userStat.active_count}/{userStat.count}
+                        </span>
+                        <Badge 
+                          variant={userStat.active_count === userStat.count ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {Math.round((userStat.active_count / userStat.count) * 100)}%
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Job Status</CardTitle>
+                <CardDescription>Jobs by current status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.jobs.map((jobStat) => (
+                    <div key={jobStat.status} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          jobStat.status === 'Published' ? 'bg-green-500' :
+                          jobStat.status === 'Draft' ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        }`}></div>
+                        <span className="text-sm font-medium">{jobStat.status}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {jobStat.count}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Application Pipeline</CardTitle>
+                <CardDescription>Applications by status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.applications.map((appStat) => (
+                    <div key={appStat.status} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          appStat.status === 'Applied' ? 'bg-blue-500' :
+                          appStat.status === 'Under Review' ? 'bg-yellow-500' :
+                          appStat.status === 'Interview' ? 'bg-purple-500' :
+                          appStat.status === 'Offer' ? 'bg-green-500' :
+                          'bg-red-500'
+                        }`}></div>
+                        <span className="text-sm font-medium">{appStat.status}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {appStat.count}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                System Alerts
+              </CardTitle>
+              <CardDescription>Important system notifications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No system alerts at this time</p>
+                <p className="text-sm">All systems are operating normally</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </ProtectedRoute>
+    </SuperAdminLayout>
   );
 }

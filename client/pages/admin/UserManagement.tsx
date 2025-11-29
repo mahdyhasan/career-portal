@@ -1,144 +1,153 @@
 import { useEffect, useState } from 'react';
-import { Layout } from '@/components/Layout';
-import SuperAdminNav from '@/components/admin/SuperAdminNav';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { adminApi } from '@/services/api';
-import { User } from '@shared/api';
-import { Button } from '@/components/ui/button';
+import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
 import { 
+  Users, 
   Search, 
-  Filter, 
-  MoreHorizontal, 
-  Eye, 
-  Edit, 
-  UserCheck, 
-  UserX,
-  Users,
-  ChevronLeft,
-  ChevronRight
+  Plus,
+  MoreHorizontal,
+  Mail,
+  Calendar,
+  Shield,
+  User,
+  ToggleLeft,
+  ToggleRight,
+  Edit,
+  Trash2,
+  Eye
 } from 'lucide-react';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useNavigate } from 'react-router-dom';
 
-interface UserListResponse {
-  data: User[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-interface Role {
+interface User {
   id: number;
-  name: string;
-  description: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: {
+    name: string;
+  };
+  is_active: boolean;
+  created_at: string;
+  last_login?: string;
 }
 
 export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedRole, setSelectedRole] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showUserDialog, setShowUserDialog] = useState(false);
-  const { toast } = useToast();
-
-  const itemsPerPage = 10;
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadUsers();
-    loadRoles();
-  }, [currentPage, search, selectedRole, selectedStatus]);
+  }, [currentPage, searchQuery]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await adminApi.getUsers(
-        currentPage,
-        itemsPerPage,
-        search,
-        selectedRole ? parseInt(selectedRole) : undefined,
-        selectedStatus ? selectedStatus === 'active' : selectedStatus === 'inactive' ? false : undefined
-      );
-
-      setUsers(response.data);
-      setTotalPages(response.totalPages);
-      setTotalUsers(response.total);
+      // Mock data for now - will be replaced with actual API call
+      const mockUsers: User[] = [
+        {
+          id: 1,
+          email: 'admin@careerportal.com',
+          first_name: 'Super',
+          last_name: 'Admin',
+          role: { name: 'SuperAdmin' },
+          is_active: true,
+          created_at: '2024-01-01T00:00:00Z',
+          last_login: '2024-11-28T10:00:00Z'
+        },
+        {
+          id: 2,
+          email: 'hiring@company.com',
+          first_name: 'John',
+          last_name: 'Hiring',
+          role: { name: 'HiringManager' },
+          is_active: true,
+          created_at: '2024-02-01T00:00:00Z',
+          last_login: '2024-11-27T15:30:00Z'
+        },
+        {
+          id: 3,
+          email: 'candidate@email.com',
+          first_name: 'Jane',
+          last_name: 'Candidate',
+          role: { name: 'Candidate' },
+          is_active: true,
+          created_at: '2024-03-01T00:00:00Z',
+          last_login: '2024-11-26T09:15:00Z'
+        }
+      ];
+      setUsers(mockUsers);
+      setTotalUsers(mockUsers.length);
+      setTotalPages(1);
     } catch (error) {
       console.error('Failed to load users:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load users",
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }
   };
 
-  const loadRoles = async () => {
+  const handleToggleUserStatus = async (user: User) => {
     try {
-      // For now, hardcode roles since we don't have a roles endpoint
-      setRoles([
-        { id: 1, name: 'SuperAdmin', description: 'Super Administrator' },
-        { id: 2, name: 'HiringManager', description: 'Hiring Manager' },
-        { id: 3, name: 'Candidate', description: 'Job Candidate' }
-      ]);
+      // Mock API call
+      setUsers(users.map(u => 
+        u.id === user.id ? { ...u, is_active: !u.is_active } : u
+      ));
     } catch (error) {
-      console.error('Failed to load roles:', error);
+      console.error('Failed to toggle user status:', error);
     }
   };
 
-  const handleUpdateUserStatus = async (userId: number, isActive: boolean) => {
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    
     try {
-      await adminApi.updateUserStatus(userId, isActive);
-      toast({
-        title: "Success",
-        description: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
-      });
-      loadUsers();
+      // Mock API call
+      setUsers(users.filter(u => u.id !== selectedUser.id));
+      setIsDeleteDialogOpen(false);
+      setSelectedUser(null);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update user status",
-        variant: "destructive",
-      });
+      console.error('Failed to delete user:', error);
     }
   };
 
-  const handleUpdateUserRole = async (userId: number, roleId: number) => {
-    try {
-      await adminApi.updateUserRole(userId, roleId);
-      toast({
-        title: "Success",
-        description: "User role updated successfully",
-      });
-      loadUsers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update user role",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const getRoleColor = (roleName: string) => {
-    switch (roleName) {
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
       case 'SuperAdmin':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'Admin':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
       case 'HiringManager':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'Candidate':
@@ -148,363 +157,275 @@ export default function UserManagement() {
     }
   };
 
-  const handleViewUser = (user: User) => {
-    setSelectedUser(user);
-    setShowUserDialog(true);
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handleResetFilters = () => {
-    setSearch('');
-    setSelectedRole('');
-    setSelectedStatus('');
-    setCurrentPage(1);
-  };
-
-  if (loading && users.length === 0) {
+  if (loading) {
     return (
-      <ProtectedRoute requireRole="SuperAdmin">
-        <div className="flex">
-          <SuperAdminNav />
-          <div className="flex-1">
-            <div className="flex items-center justify-center min-h-screen">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <SuperAdminLayout>
+        <div className="py-8 px-4">
+          <div className="container mx-auto">
+            <div className="animate-pulse">
+              <div className="h-8 bg-muted rounded w-64 mb-8"></div>
+              <div className="bg-muted h-96 rounded-lg"></div>
             </div>
           </div>
         </div>
-      </ProtectedRoute>
+      </SuperAdminLayout>
     );
   }
 
   return (
-    <ProtectedRoute requireRole="SuperAdmin">
-      <div className="flex">
-        <SuperAdminNav />
-        <div className="flex-1">
-          <div className="py-8 px-4">
-            <div className="container mx-auto max-w-7xl">
-              {/* Page Header */}
-              <div className="mb-8 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <Users className="h-8 w-8 text-primary" />
-                    <h1 className="text-3xl font-bold text-foreground">User Management</h1>
-                  </div>
-                  <p className="text-muted-foreground text-lg">
-                    Manage system users, roles, and permissions
-                  </p>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <Button variant="outline" onClick={handleResetFilters}>
-                    Reset Filters
-                  </Button>
-                </div>
+    <SuperAdminLayout>
+      <div className="py-8 px-4">
+        <div className="container mx-auto">
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">
+                  User Management
+                </h1>
+                <p className="text-muted-foreground">
+                  Manage system users, roles, and permissions
+                </p>
               </div>
-
-              {/* Filters */}
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Filter className="h-5 w-5" />
-                    Filters
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <Label htmlFor="search">Search Users</Label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="search"
-                          placeholder="Search by name, email..."
-                          value={search}
-                          onChange={(e) => {
-                            setSearch(e.target.value);
-                            setCurrentPage(1);
-                          }}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="role">Role</Label>
-                      <Select value={selectedRole} onValueChange={(value) => {
-                        setSelectedRole(value);
-                        setCurrentPage(1);
-                      }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All roles" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">All roles</SelectItem>
-                          {roles.map((role) => (
-                            <SelectItem key={role.id} value={role.id.toString()}>
-                              {role.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="status">Status</Label>
-                      <Select value={selectedStatus} onValueChange={(value) => {
-                        setSelectedStatus(value);
-                        setCurrentPage(1);
-                      }}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All statuses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">All statuses</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-end">
-                      <div className="text-sm text-muted-foreground">
-                        {totalUsers} users found
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Users Table */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Users ({totalUsers})</CardTitle>
-                  <CardDescription>
-                    Manage user accounts, roles, and permissions
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Joined</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                            <p className="text-muted-foreground mt-2">Loading users...</p>
-                          </TableCell>
-                        </TableRow>
-                      ) : users.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8">
-                            <p className="text-muted-foreground">No users found</p>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        users.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium">{user.first_name} {user.last_name}</p>
-                                <p className="text-sm text-muted-foreground">{user.email}</p>
-                                {user.phone && (
-                                  <p className="text-sm text-muted-foreground">{user.phone}</p>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getRoleColor(user.role?.name || '')}>
-                                {user.role?.name || 'Unknown'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${
-                                  user.is_active ? 'bg-green-500' : 'bg-red-500'
-                                }`}></div>
-                                <span className={user.is_active ? 'text-green-600' : 'text-red-600'}>
-                                  {user.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-sm">
-                                {new Date(user.created_at).toLocaleDateString()}
-                              </p>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => handleViewUser(user)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  {user.is_active ? (
-                                    <DropdownMenuItem 
-                                      onClick={() => handleUpdateUserStatus(user.id, false)}
-                                      className="text-red-600"
-                                    >
-                                      <UserX className="h-4 w-4 mr-2" />
-                                      Deactivate
-                                    </DropdownMenuItem>
-                                  ) : (
-                                    <DropdownMenuItem 
-                                      onClick={() => handleUpdateUserStatus(user.id, true)}
-                                      className="text-green-600"
-                                    >
-                                      <UserCheck className="h-4 w-4 mr-2" />
-                                      Activate
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const newRole = user.role?.name === 'SuperAdmin' ? 2 : 1;
-                                      handleUpdateUserRole(user.id, newRole);
-                                    }}
-                                  >
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Change Role
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4">
-                      <p className="text-sm text-muted-foreground">
-                        Page {currentPage} of {totalPages}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={currentPage === 1}
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            const page = i + 1;
-                            return (
-                              <Button
-                                key={page}
-                                variant={currentPage === page ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => handlePageChange(page)}
-                              >
-                                {page}
-                              </Button>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          disabled={currentPage === totalPages}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* User Details Dialog */}
-              <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>User Details</DialogTitle>
-                    <DialogDescription>
-                      Complete information about selected user
-                    </DialogDescription>
-                  </DialogHeader>
-                  {selectedUser && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Full Name</Label>
-                        <p className="font-medium">
-                          {selectedUser.first_name} {selectedUser.last_name}
-                        </p>
-                      </div>
-                      <div>
-                        <Label>Email</Label>
-                        <p className="font-medium">{selectedUser.email}</p>
-                      </div>
-                      <div>
-                        <Label>Phone</Label>
-                        <p className="font-medium">{selectedUser.phone || 'Not provided'}</p>
-                      </div>
-                      <div>
-                        <Label>Role</Label>
-                        <Badge className={getRoleColor(selectedUser.role?.name || '')}>
-                          {selectedUser.role?.name || 'Unknown'}
-                        </Badge>
-                      </div>
-                      <div>
-                        <Label>Status</Label>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            selectedUser.is_active ? 'bg-green-500' : 'bg-red-500'
-                          }`}></div>
-                          <span className={selectedUser.is_active ? 'text-green-600' : 'text-red-600'}>
-                            {selectedUser.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Joined</Label>
-                        <p className="font-medium">
-                          {new Date(selectedUser.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {selectedUser.updated_at && (
-                        <div>
-                          <Label>Last Updated</Label>
-                          <p className="font-medium">
-                            {new Date(selectedUser.updated_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowUserDialog(false)}>
-                      Close
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button
+                onClick={() => navigate('/admin/users/create')}
+                className="flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Add User
+              </Button>
             </div>
           </div>
+
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                  <Input
+                    placeholder="Search users by name, email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Badge variant="secondary" className="px-3 py-1">
+                  {totalUsers} users
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>System Users</CardTitle>
+              <CardDescription>
+                All registered users in system
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead>Last Login</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                            <User size={16} className="text-primary" />
+                          </div>
+                          <div>
+                            <div className="font-medium">
+                              {user.first_name} {user.last_name}
+                            </div>
+                            <div className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Mail size={12} />
+                              {user.email}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="secondary" 
+                          className={getRoleBadgeColor(user.role.name)}
+                        >
+                          <Shield size={12} className="mr-1" />
+                          {user.role.name}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleUserStatus(user)}
+                          className="flex items-center gap-2"
+                        >
+                          {user.is_active ? (
+                            <>
+                              <ToggleRight size={16} className="text-green-600" />
+                              <span className="text-green-600">Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <ToggleLeft size={16} className="text-red-600" />
+                              <span className="text-red-600">Inactive</span>
+                            </>
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Calendar size={12} />
+                          {formatDate(user.created_at)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground">
+                          {user.last_login ? formatDate(user.last_login) : 'Never'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal size={16} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/admin/users/${user.id}`)}>
+                              <Eye size={14} className="mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/users/${user.id}/edit`)}>
+                              <Edit size={14} className="mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 size={14} className="mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        const page = i + 1;
+                        return (
+                          <Button
+                            key={page}
+                            variant={page === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete User</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this user? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              {selectedUser && (
+                <div className="py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                      <User size={20} className="text-red-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium">
+                        {selectedUser.first_name} {selectedUser.last_name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedUser.email}
+                      </div>
+                      <Badge variant="secondary" className="mt-1">
+                        {selectedUser.role.name}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteUser}
+                >
+                  Delete User
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
-    </ProtectedRoute>
+    </SuperAdminLayout>
   );
 }

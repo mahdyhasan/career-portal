@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import SuperAdminNav from '@/components/admin/SuperAdminNav';
+import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
 import { adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -144,9 +144,7 @@ export default function SystemConfig() {
 
   return (
     <ProtectedRoute requireRole="SuperAdmin">
-      <div className="flex">
-        <SuperAdminNav />
-        <div className="flex-1">
+      <SuperAdminLayout>
           <div className="py-8 px-4">
             <div className="container mx-auto max-w-4xl">
               {/* Page Header */}
@@ -518,8 +516,7 @@ export default function SystemConfig() {
               </Tabs>
             </div>
           </div>
-        </div>
-      </div>
+        </SuperAdminLayout>
     </ProtectedRoute>
   );
 }

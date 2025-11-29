@@ -91,7 +91,7 @@ export default function ApplyJobPage() {
   }
 
   return (
-    <ProtectedRoute requireRole="candidate">
+    <ProtectedRoute requireRole="Candidate">
       <Layout>
         <div className="py-12 px-4">
           <div className="container mx-auto max-w-3xl">

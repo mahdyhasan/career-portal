@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Layout } from '@/components/Layout';
+import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -163,7 +163,7 @@ export default function DataExport() {
 
   return (
     <ProtectedRoute requireRole="SuperAdmin">
-      <Layout>
+      <SuperAdminLayout>
         <div className="py-8 px-4">
           <div className="container mx-auto max-w-6xl">
             {/* Page Header */}
@@ -320,7 +320,7 @@ export default function DataExport() {
             </div>
           </div>
         </div>
-      </Layout>
+      </SuperAdminLayout>
     </ProtectedRoute>
   );
 }

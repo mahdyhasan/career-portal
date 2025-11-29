@@ -10,7 +10,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 export default function Signup() {
   const navigate = useNavigate();
   const { signup, isLoading, error, clearError } = useAuth();
-  const [role, setRole] = useState<'admin' | 'candidate'>('candidate');
+  const [role, setRole] = useState<'HiringManager' | 'Candidate'>('Candidate');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -37,7 +37,7 @@ export default function Signup() {
       return;
     }
 
-    if (role === 'candidate' && (!formData.firstName || !formData.lastName)) {
+    if (role === 'Candidate' && (!formData.firstName || !formData.lastName)) {
       setLocalError('Please fill in your name');
       return;
     }
@@ -57,12 +57,12 @@ export default function Signup() {
         formData.email,
         formData.password,
         role,
-        role === 'candidate' ? formData.firstName : undefined,
-        role === 'candidate' ? formData.lastName : undefined
+        role === 'Candidate' ? formData.firstName : undefined,
+        role === 'Candidate' ? formData.lastName : undefined
       );
 
       // Navigate based on role
-      if (role === 'admin') {
+      if (role === 'HiringManager') {
         navigate('/admin/dashboard');
       } else {
         navigate('/profile');
@@ -106,9 +106,9 @@ export default function Signup() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setRole('candidate')}
+                  onClick={() => setRole('Candidate')}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-all ${
-                    role === 'candidate'
+                    role === 'Candidate'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border text-foreground hover:border-primary/50'
                   }`}
@@ -117,9 +117,9 @@ export default function Signup() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRole('admin')}
+                  onClick={() => setRole('HiringManager')}
                   className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-all ${
-                    role === 'admin'
+                    role === 'HiringManager'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border text-foreground hover:border-primary/50'
                   }`}
@@ -131,7 +131,7 @@ export default function Signup() {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-              {role === 'candidate' && (
+              {role === 'Candidate' && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

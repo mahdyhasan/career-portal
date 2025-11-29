@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { FormField, FormFieldType } from '@shared/api';
+import { JobFormField } from '@shared/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 
 interface DynamicFormBuilderProps {
-  fields: FormField[];
-  onChange: (fields: FormField[]) => void;
+  fields: JobFormField[];
+  onChange: (fields: JobFormField[]) => void;
 }
 
-const fieldTypes: FormFieldType[] = [
+const fieldTypes = [
   'text',
   'email',
   'phone',
@@ -22,27 +22,31 @@ const fieldTypes: FormFieldType[] = [
 ];
 
 export function DynamicFormBuilder({ fields, onChange }: DynamicFormBuilderProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingData, setEditingData] = useState<Partial<FormField>>({});
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingData, setEditingData] = useState<Partial<JobFormField>>({});
 
   const addField = () => {
-    const newField: FormField = {
-      id: `field-${Date.now()}`,
+    const newField: JobFormField = {
+      id: Date.now(), // Use number instead of string
       name: `field_${fields.length + 1}`,
       label: 'New Field',
       type: 'text',
       required: false,
       order: fields.length,
-      options: [],
+      placeholder: '',
+      job_id: 0, // Will be set when saving to backend
+      input_type_id: 1, // Default to text input type
+      is_required: false,
+      sort_order: fields.length,
     };
     onChange([...fields, newField]);
   };
 
-  const removeField = (id: string) => {
+  const removeField = (id: number) => {
     onChange(fields.filter(f => f.id !== id));
   };
 
-  const startEditing = (field: FormField) => {
+  const startEditing = (field: JobFormField) => {
     setEditingId(field.id);
     setEditingData({ ...field });
   };
@@ -150,7 +154,7 @@ export function DynamicFormBuilder({ fields, onChange }: DynamicFormBuilderProps
                           onChange={(e) =>
                             setEditingData(prev => ({
                               ...prev,
-                              type: e.target.value as FormFieldType,
+                              type: e.target.value,
                             }))
                           }
                           className="w-full px-3 py-2 border border-border rounded-lg text-sm"
@@ -182,14 +186,20 @@ export function DynamicFormBuilder({ fields, onChange }: DynamicFormBuilderProps
                           Options (one per line)
                         </Label>
                         <textarea
-                          value={(editingData.options || []).join('\n')}
+                          value={(editingData.options || []).map(opt => opt.option_label).join('\n')}
                           onChange={(e) =>
                             setEditingData(prev => ({
                               ...prev,
                               options: e.target.value
                                 .split('\n')
-                                .map(o => o.trim())
-                                .filter(Boolean),
+                                .map((o, index) => ({
+                                  id: index,
+                                  job_form_field_id: editingId || 0,
+                                  option_label: o.trim(),
+                                  option_value: o.trim().toLowerCase().replace(/\s+/g, '_'),
+                                  sort_order: index,
+                                }))
+                                .filter(opt => opt.option_label),
                             }))
                           }
                           className="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none"

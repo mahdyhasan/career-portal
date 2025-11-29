@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FormField } from '@shared/api';
+import { JobFormField } from '@shared/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, Upload } from 'lucide-react';
 
 interface DynamicApplicationFormProps {
-  fields: FormField[];
+  fields: JobFormField[];
   onSubmit: (data: Record<string, any>) => Promise<void>;
   isLoading?: boolean;
 }
@@ -44,7 +44,7 @@ export function DynamicApplicationForm({
 
     fields.forEach(field => {
       const value = formData[field.name];
-      if (field.required && !value) {
+      if (field.is_required && !value) {
         newErrors[field.name] = `${field.label} is required`;
       }
     });
@@ -72,7 +72,7 @@ export function DynamicApplicationForm({
   };
 
   // Sort fields by order
-  const sortedFields = [...fields].sort((a, b) => a.order - b.order);
+  const sortedFields = [...fields].sort((a, b) => a.sort_order - b.sort_order);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -89,11 +89,11 @@ export function DynamicApplicationForm({
         <div key={field.id}>
           <Label htmlFor={field.name} className="text-sm font-medium text-foreground mb-2 block">
             {field.label}
-            {field.required && <span className="text-destructive ml-1">*</span>}
+            {field.is_required && <span className="text-destructive ml-1">*</span>}
           </Label>
 
           {/* Text Input */}
-          {field.type === 'text' && (
+          {field.input_type?.name === 'text' && (
             <Input
               id={field.name}
               type="text"
@@ -106,7 +106,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Email Input */}
-          {field.type === 'email' && (
+          {field.input_type?.name === 'email' && (
             <Input
               id={field.name}
               type="email"
@@ -119,7 +119,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Phone Input */}
-          {field.type === 'phone' && (
+          {field.input_type?.name === 'phone' && (
             <Input
               id={field.name}
               type="tel"
@@ -132,7 +132,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Date Input */}
-          {field.type === 'date' && (
+          {field.input_type?.name === 'date' && (
             <Input
               id={field.name}
               type="date"
@@ -144,7 +144,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Textarea */}
-          {field.type === 'textarea' && (
+          {field.input_type?.name === 'textarea' && (
             <Textarea
               id={field.name}
               placeholder={field.placeholder}
@@ -157,7 +157,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Select */}
-          {field.type === 'select' && (
+          {field.input_type?.name === 'select' && (
             <select
               id={field.name}
               value={formData[field.name]}
@@ -169,15 +169,15 @@ export function DynamicApplicationForm({
             >
               <option value="">Select {field.label}</option>
               {field.options?.map(option => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.id} value={option.option_value}>
+                  {option.option_label}
                 </option>
               ))}
             </select>
           )}
 
           {/* File Upload */}
-          {field.type === 'file' && (
+          {field.input_type?.name === 'file' && (
             <div>
               <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-secondary/30 transition-colors">
                 <div className="text-center">
@@ -208,7 +208,7 @@ export function DynamicApplicationForm({
           )}
 
           {/* Checkbox */}
-          {field.type === 'checkbox' && (
+          {field.input_type?.name === 'checkbox' && (
             <div className="flex items-center gap-2">
               <input
                 id={field.name}

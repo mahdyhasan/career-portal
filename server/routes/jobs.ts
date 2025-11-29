@@ -50,21 +50,20 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
 
     if (req.query.job_type_id) {
       query += ' AND j.job_type_id = ?';
-      params.push(req.query.job_type_id);
+      params.push(parseInt(req.query.job_type_id as string));
     }
 
     if (req.query.experience_level_id) {
       query += ' AND j.experience_level_id = ?';
-      params.push(req.query.experience_level_id);
+      params.push(parseInt(req.query.experience_level_id as string));
     }
 
     if (req.query.company_id) {
       query += ' AND j.company_id = ?';
-      params.push(req.query.company_id);
+      params.push(parseInt(req.query.company_id as string));
     }
 
-    query += ' ORDER BY j.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    query += ` ORDER BY j.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const jobs = await executeQuery<any>(query, params);
 
@@ -85,17 +84,17 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
 
     if (req.query.job_type_id) {
       countFilterQuery += ' AND j.job_type_id = ?';
-      countParams.push(req.query.job_type_id);
+      countParams.push(parseInt(req.query.job_type_id as string));
     }
 
     if (req.query.experience_level_id) {
       countFilterQuery += ' AND j.experience_level_id = ?';
-      countParams.push(req.query.experience_level_id);
+      countParams.push(parseInt(req.query.experience_level_id as string));
     }
 
     if (req.query.company_id) {
       countFilterQuery += ' AND j.company_id = ?';
-      countParams.push(req.query.company_id);
+      countParams.push(parseInt(req.query.company_id as string));
     }
 
     const totalResult = await findOne<{ total: number }>(

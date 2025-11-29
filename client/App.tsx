@@ -7,6 +7,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+// Components
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+
 // Pages
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
@@ -22,7 +25,7 @@ import AdminCandidateManagement from "./pages/admin/CandidateManagement";
 import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import AuditLog from "./pages/admin/AuditLog";
-import SystemConfig from "./pages/admin/SystemConfig";
+import SystemConfiguration from "./pages/admin/SystemConfiguration";
 import DataExport from "./pages/admin/DataExport";
 import SystemStats from "./pages/admin/SystemStats";
 
@@ -44,22 +47,66 @@ const App = () => (
           <Route path="/jobs" element={<JobsList />} />
           <Route path="/jobs/:id" element={<JobDetails />} />
           
-          {/* Candidate Routes */}
-          <Route path="/apply/:jobId" element={<ApplyJob />} />
-          <Route path="/profile" element={<CandidateProfile />} />
+          {/* Candidate Routes - Protected */}
+          <Route path="/apply/:jobId" element={
+            <ProtectedRoute requireRole="Candidate">
+              <ApplyJob />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute requireRole="Candidate">
+              <CandidateProfile />
+            </ProtectedRoute>
+          } />
           
-          {/* Admin Routes */}
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/create-job" element={<AdminCreateJob />} />
-          <Route path="/admin/candidates" element={<AdminCandidateManagement />} />
+          {/* Admin Routes - Protected */}
+          <Route path="/admin/dashboard" element={
+            <ProtectedRoute requireRole="HiringManager">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/create-job" element={
+            <ProtectedRoute requireRole="HiringManager">
+              <AdminCreateJob />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/candidates" element={
+            <ProtectedRoute requireRole="HiringManager">
+              <AdminCandidateManagement />
+            </ProtectedRoute>
+          } />
           
-          {/* Super Admin Routes */}
-          <Route path="/admin/super-dashboard" element={<SuperAdminDashboard />} />
-          <Route path="/admin/users" element={<UserManagement />} />
-          <Route path="/admin/audit-log" element={<AuditLog />} />
-          <Route path="/admin/config" element={<SystemConfig />} />
-          <Route path="/admin/export" element={<DataExport />} />
-          <Route path="/admin/stats" element={<SystemStats />} />
+          {/* Super Admin Routes - Protected */}
+          <Route path="/admin/super-dashboard" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <SuperAdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <UserManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/audit-log" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <AuditLog />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/config" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <SystemConfiguration />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/export" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <DataExport />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/stats" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <SystemStats />
+            </ProtectedRoute>
+          } />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />

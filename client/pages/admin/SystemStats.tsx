@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import SuperAdminNav from '@/components/admin/SuperAdminNav';
+import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
 import { adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -143,23 +143,18 @@ export default function SystemStats() {
   if (loading) {
     return (
       <ProtectedRoute requireRole="SuperAdmin">
-        <div className="flex">
-          <SuperAdminNav />
-          <div className="flex-1">
-            <div className="flex items-center justify-center min-h-screen">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
+        <SuperAdminLayout>
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
-        </div>
+        </SuperAdminLayout>
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute requireRole="SuperAdmin">
-      <div className="flex">
-        <SuperAdminNav />
-        <div className="flex-1">
+      <SuperAdminLayout>
           <div className="py-8 px-4">
             <div className="container mx-auto max-w-7xl">
               {/* Page Header */}
@@ -387,8 +382,7 @@ export default function SystemStats() {
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </SuperAdminLayout>
     </ProtectedRoute>
   );
 }
