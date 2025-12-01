@@ -1,5 +1,6 @@
+// server/routes/applications.ts
 import { RequestHandler } from "express";
-import { executeQuery } from "../config/database";
+import { executeQuery, executeSingleQuery } from "../config/database";
 import { AuthRequest } from "../middleware/auth";
 
 // Get applications (for candidates and admins)
@@ -22,14 +23,22 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
     let whereClause = "";
     let queryParams: any[] = [];
 
+    // Handle candidate_user_id filter for admins
+    const candidateUserId = req.query.candidate_user_id ? parseInt(req.query.candidate_user_id as string) : null;
+
     if (role === 'Candidate') {
       // Candidates can only see their own applications
       whereClause = "WHERE cp.user_id = ?";
       queryParams = [userId];
     } else if (role === 'HiringManager' || role === 'SuperAdmin') {
-      // Admins can see all applications
-      whereClause = "";
-      queryParams = [];
+      // Admins can see all applications, or filter by candidate_user_id if provided
+      if (candidateUserId) {
+        whereClause = "WHERE cp.user_id = ?";
+        queryParams = [candidateUserId];
+      } else {
+        whereClause = "";
+        queryParams = [];
+      }
     } else {
       return res.status(403).json({ 
         message: 'Access denied',
@@ -45,7 +54,7 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
       ${whereClause}
     `, queryParams);
 
-    // Get applications with pagination
+    // Get applications with pagination - simplified version to debug the issue
     const applicationsResult = await executeQuery(`
       SELECT 
         a.id,
@@ -67,47 +76,34 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
       LEFT JOIN application_statuses s ON a.status_id = s.id
       ${whereClause}
       ORDER BY a.created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
     `, queryParams);
 
-    // Get application history for each application
-    const applications = await Promise.all(
-      applicationsResult.map(async (app: any) => {
-        const historyResult = await executeQuery(`
-          SELECT ah.notes, ah.created_at, u.email as created_by_email
-          FROM application_history ah
-          LEFT JOIN users u ON ah.changed_by_user_id = u.id
-          WHERE ah.application_id = ?
-          ORDER BY ah.created_at DESC
-        `, [app.id]);
-
-        return {
-          id: app.id,
-          job: {
-            id: app.job_id,
-            title: app.job_title,
-            location_text: app.job_location
-          },
-          candidate: {
-            id: app.candidate_user_id,
-            first_name: app.first_name,
-            last_name: app.last_name
-          },
-          status: {
-            id: app.status_id,
-            name: app.status_name
-          },
-          created_at: app.created_at,
-          updated_at: app.updated_at,
-          history: historyResult
-        };
-      })
-    );
+    // Process applications (without history for now since table doesn't exist)
+    const applications = applicationsResult.map((app: any) => ({
+      id: app.id,
+      job: {
+        id: app.job_id,
+        title: app.job_title,
+        location_text: app.job_location
+      },
+      candidate: {
+        id: app.candidate_user_id,
+        first_name: app.first_name,
+        last_name: app.last_name
+      },
+      status: {
+        id: app.status_id,
+        name: app.status_name
+      },
+      created_at: app.created_at,
+      updated_at: app.updated_at,
+      history: [] // Empty array for now since table doesn't exist
+    }));
 
     const total = countResult[0]?.total || 0;
 
     res.json({
-      data: applications,
+      applications,
       pagination: {
         page,
         limit,
@@ -117,7 +113,7 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching applications:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -195,14 +191,8 @@ export const handleGetApplication: RequestHandler = async (req, res) => {
       ORDER BY jff.sort_order
     `, [applicationId]);
 
-    // Get application history
-    const historyResult = await executeQuery(`
-      SELECT ah.notes, ah.created_at, u.email as created_by_email
-      FROM application_history ah
-      LEFT JOIN users u ON ah.changed_by_user_id = u.id
-      WHERE ah.application_id = ?
-      ORDER BY ah.created_at DESC
-    `, [applicationId]);
+    // Get application history (disabled for now since table doesn't exist)
+    const historyResult: any[] = [];
 
     const applicationData = {
       id: application.id,
@@ -234,7 +224,7 @@ export const handleGetApplication: RequestHandler = async (req, res) => {
     res.json(applicationData);
   } catch (error) {
     console.error('Error fetching application:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -290,17 +280,12 @@ export const handleSubmitApplication: RequestHandler = async (req, res) => {
     const statusId = statusResult.length > 0 ? statusResult[0].id : 1;
 
     // Create application
-    await executeQuery(`
+    const applicationInsertResult = await executeSingleQuery(`
       INSERT INTO applications (candidate_user_id, job_id, status_id, created_at, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `, [userId, job_id, statusId]);
 
-    // Get the created application ID
-    const applicationResult = await executeQuery(`
-      SELECT id FROM applications WHERE candidate_user_id = ? AND job_id = ? ORDER BY created_at DESC LIMIT 1
-    `, [userId, job_id]);
-
-    const applicationId = applicationResult[0].id;
+    const applicationId = applicationInsertResult.insertId;
 
     // Insert application answers
     for (const answer of answers) {
@@ -312,7 +297,7 @@ export const handleSubmitApplication: RequestHandler = async (req, res) => {
       }
     }
 
-    // Get the complete application data
+    // Get complete application data
     const completeApplicationResult = await executeQuery(`
       SELECT 
         a.id,
@@ -330,7 +315,7 @@ export const handleSubmitApplication: RequestHandler = async (req, res) => {
 
     const application = completeApplicationResult[0];
 
-    res.json({
+    res.status(201).json({
       id: application.id,
       job: {
         id: application.job_id,
@@ -350,7 +335,7 @@ export const handleSubmitApplication: RequestHandler = async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting application:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -381,6 +366,17 @@ export const handleUpdateApplicationStatus: RequestHandler = async (req, res) =>
       return res.status(400).json({ message: 'Status ID is required' });
     }
 
+    // Get current application to check if it exists
+    const applicationResult = await executeQuery(`
+      SELECT id, status_id FROM applications WHERE id = ?
+    `, [applicationId]);
+
+    if (applicationResult.length === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    const previousStatusId = applicationResult[0].status_id;
+
     // Update application status
     await executeQuery(`
       UPDATE applications 
@@ -388,16 +384,11 @@ export const handleUpdateApplicationStatus: RequestHandler = async (req, res) =>
       WHERE id = ?
     `, [status_id, applicationId]);
 
-    // Add to history if notes provided
-    if (notes) {
-      await executeQuery(`
-        INSERT INTO application_history (application_id, previous_status_id, new_status_id, changed_by_user_id, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `, [applicationId, status_id, status_id, userId, notes]);
-    }
+    // History tracking disabled for now since table doesn't exist
+    // TODO: Create application_history table to enable status tracking
 
     // Get updated application
-    const applicationResult = await executeQuery(`
+    const updatedApplicationResult = await executeQuery(`
       SELECT 
         a.id,
         a.job_id,
@@ -412,10 +403,10 @@ export const handleUpdateApplicationStatus: RequestHandler = async (req, res) =>
       WHERE a.id = ?
     `, [applicationId]);
 
-    res.json(applicationResult[0]);
+    res.json(updatedApplicationResult[0]);
   } catch (error) {
     console.error('Error updating application status:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -459,6 +450,76 @@ export const handleGetApplicationStats: RequestHandler = async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error('Error fetching application stats:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+};
+
+// Withdraw application (Candidate only)
+export const handleWithdrawApplication: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const applicationId = parseInt(req.params.applicationId);
+
+    if (!userId || !role) {
+      return res.status(401).json({ 
+        message: 'Authentication required',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    if (role !== 'Candidate') {
+      return res.status(403).json({ 
+        message: 'Access denied. Candidate role required.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+    if (isNaN(applicationId)) {
+      return res.status(400).json({ message: 'Invalid application ID' });
+    }
+
+    // Check if application belongs to candidate
+    const applicationResult = await executeQuery(`
+      SELECT id, status_id FROM applications WHERE id = ? AND candidate_user_id = ?
+    `, [applicationId, userId]);
+
+    if (applicationResult.length === 0) {
+      return res.status(404).json({ message: 'Application not found or access denied' });
+    }
+
+    const previousStatusId = applicationResult[0].status_id;
+
+    // Get 'Withdrawn' status ID
+    const withdrawnStatusResult = await executeQuery(`
+      SELECT id FROM application_statuses WHERE name = 'Withdrawn' LIMIT 1
+    `);
+
+    let withdrawnStatusId;
+    if (withdrawnStatusResult.length === 0) {
+      // Create withdrawn status if it doesn't exist
+      const newStatus = await executeSingleQuery(`
+        INSERT INTO application_statuses (name) VALUES ('Withdrawn')
+      `);
+      withdrawnStatusId = newStatus.insertId;
+    } else {
+      withdrawnStatusId = withdrawnStatusResult[0].id;
+    }
+
+    // Update application status
+    await executeQuery(`
+      UPDATE applications 
+      SET status_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [withdrawnStatusId, applicationId]);
+
+    // History tracking disabled for now since table doesn't exist
+    // TODO: Create application_history table to enable status tracking
+
+    res.json({ message: 'Application withdrawn successfully' });
+  } catch (error) {
+    console.error('Error withdrawing application:', error);
+    res.status(500).json({ message: 'Internal server error', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };

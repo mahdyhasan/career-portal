@@ -1,3 +1,4 @@
+//shared/api.ts
 import { ReactNode } from 'react';
 
 /**
@@ -479,6 +480,7 @@ export interface JobsListResponse {
 }
 
 export interface ApplicationsListResponse {
+  data(data: any): unknown;
   applications: Application[];
   total: number;
 }

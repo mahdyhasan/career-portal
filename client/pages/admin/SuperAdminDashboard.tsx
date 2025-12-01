@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
+import { adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,33 +39,8 @@ export default function SuperAdminDashboard() {
   const loadDashboardStats = async () => {
     try {
       setLoading(true);
-      // Mock data for now - will be replaced with actual API call
-      const mockStats: DashboardStats = {
-        users: [
-          { role: 'SuperAdmin', count: 1, active_count: 1 },
-          { role: 'Admin', count: 3, active_count: 2 },
-          { role: 'HiringManager', count: 15, active_count: 12 },
-          { role: 'Candidate', count: 248, active_count: 189 }
-        ],
-        jobs: [
-          { status: 'Published', count: 45 },
-          { status: 'Draft', count: 12 },
-          { status: 'Closed', count: 23 }
-        ],
-        applications: [
-          { status: 'Applied', count: 156 },
-          { status: 'Under Review', count: 89 },
-          { status: 'Interview', count: 34 },
-          { status: 'Offer', count: 12 },
-          { status: 'Rejected', count: 78 }
-        ],
-        recentActivity: {
-          new_users: 23,
-          new_jobs: 8,
-          new_applications: 45
-        }
-      };
-      setStats(mockStats);
+      const response = await adminApi.getSystemStats() as any;
+      setStats(response);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);
     } finally {

@@ -1,5 +1,9 @@
+// server/config/database.ts
 import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 import { parse } from 'url';
+
+dotenv.config();
 
 // Parse DATABASE_URL
 const databaseUrl = process.env.DATABASE_URL || 'mysql://root:@localhost:3306/augmex_career';

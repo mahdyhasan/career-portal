@@ -162,22 +162,29 @@ export const handleGetJob: RequestHandler = async (req, res) => {
     // Get form fields for this job
     const formFields = await executeQuery<any>(`
       SELECT jff.*, 
-             it.name as input_type_name,
-             JSON_ARRAYAGG(
-               JSON_OBJECT(
-                 'id', jffo.id,
-                 'option_label', jffo.option_label,
-                 'option_value', jffo.option_value,
-                 'sort_order', jffo.sort_order
-               )
-             ) as options
+             it.id as input_type_id,
+             it.name as input_type_name
       FROM job_form_fields jff
       LEFT JOIN input_types it ON jff.input_type_id = it.id
-      LEFT JOIN job_form_field_options jffo ON jff.id = jffo.job_form_field_id
       WHERE jff.job_id = ?
-      GROUP BY jff.id
       ORDER BY jff.sort_order
     `, [jobId]);
+
+    // Get options for each field separately
+    for (const field of formFields) {
+      const options = await executeQuery<any>(`
+        SELECT id, option_label, option_value, sort_order
+        FROM job_form_field_options
+        WHERE job_form_field_id = ?
+        ORDER BY sort_order
+      `, [field.id]);
+      
+      field.options = options;
+      field.input_type = {
+        id: field.input_type_id,
+        name: field.input_type_name
+      };
+    }
 
     job.form_fields = formFields;
 

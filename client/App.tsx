@@ -150,4 +150,3 @@ const App = () => (
 );
 
 createRoot(document.getElementById("root")!).render(<App />);
-createRoot(document.getElementById("root")!).render(<App />);

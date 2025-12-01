@@ -1,3 +1,4 @@
+// server/services/authService.ts
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';

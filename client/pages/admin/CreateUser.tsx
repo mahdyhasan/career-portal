@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
+import { adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +24,6 @@ interface UserFormData {
   confirm_password: string;
   role: 'Admin' | 'HiringManager' | 'Candidate';
   phone: string;
-  department: string;
   status: 'active' | 'inactive';
 }
 
@@ -37,7 +37,6 @@ export default function CreateUser() {
     confirm_password: '',
     role: 'Candidate',
     phone: '',
-    department: '',
     status: 'active'
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -86,9 +85,6 @@ export default function CreateUser() {
       newErrors.phone = 'Phone number is required';
     }
 
-    if (!formData.department.trim()) {
-      newErrors.department = 'Department is required';
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -103,10 +99,15 @@ export default function CreateUser() {
 
     setLoading(true);
     try {
-      // In real implementation, this would call the API
-      // await adminApi.createUser(formData);
-      
-      console.log('Creating user:', formData);
+      await adminApi.createUser({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        password: formData.password,
+        role_name: formData.role,
+        phone: formData.phone,
+        is_active: formData.status === 'active'
+      });
       
       // Show success message and redirect
       setTimeout(() => {
@@ -242,19 +243,7 @@ export default function CreateUser() {
                         </Select>
                       </div>
 
-                      <div>
-                        <Label htmlFor="department">Department *</Label>
-                        <Input
-                          id="department"
-                          value={formData.department}
-                          onChange={(e) => handleInputChange('department', e.target.value)}
-                          placeholder="Enter department"
-                          className={errors.department ? 'border-red-500' : ''}
-                        />
-                        {errors.department && (
-                          <p className="text-sm text-red-500 mt-1">{errors.department}</p>
-                        )}
-                      </div>
+                      
 
                       <div>
                         <Label htmlFor="password">Password *</Label>

@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+// client/pages/candidate/ApplyJob.tsx
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DynamicApplicationForm } from '@/components/forms/DynamicApplicationForm';
 import { useAuth } from '@/hooks/useAuth';
 import { jobsApi, applicationsApi, candidateApi } from '@/services/api';
 import { Job, CandidateProfile, CandidateProfileUpdateRequest } from '@shared/api';
-import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Briefcase, MapPin, DollarSign, Calendar, Building, Users, Clock, AlertCircle } from 'lucide-react';
 
 export default function ApplyJobPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -19,12 +21,26 @@ export default function ApplyJobPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [hasApplied, setHasApplied] = useState(false);
+  const [applicationsError, setApplicationsError] = useState(false);
+  
+  // Use a ref to track if the component is mounted
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    // Set up a cleanup function to mark the component as unmounted
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       if (!jobId || !user?.id) return;
       try {
         setLoading(true);
+        
+        // First, get the job and profile data
         const [jobData, profileData] = await Promise.all([
           jobsApi.getJob(parseInt(jobId)),
           candidateApi.getMyProfile(),
@@ -35,12 +51,39 @@ export default function ApplyJobPage() {
           return;
         }
 
-        setJob(jobData);
-        setCandidateProfile(profileData);
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          setJob(jobData);
+          setCandidateProfile(profileData);
+        }
+
+        // Then, try to get applications data separately
+        try {
+          const applicationsData = await applicationsApi.getApplications({ candidate_user_id: user.id });
+          
+          // Check if already applied
+          const applicationsResponse = applicationsData as any;
+          const applicationsList = applicationsResponse?.applications || applicationsResponse?.data || [];
+          const alreadyApplied = applicationsList.some((app: any) => app.job_id === parseInt(jobId));
+          
+          if (isMountedRef.current) {
+            setHasApplied(alreadyApplied);
+          }
+        } catch (appErr) {
+          console.warn('Failed to load applications:', appErr);
+          // Don't fail the whole page if applications can't be loaded
+          if (isMountedRef.current) {
+            setApplicationsError(true);
+          }
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load job');
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err.message : 'Failed to load job');
+        }
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
@@ -111,11 +154,18 @@ export default function ApplyJobPage() {
         candidate_profile: Object.keys(profileUpdate).length > 0 ? profileUpdate : undefined,
       });
 
-      setSubmitted(true);
+      if (isMountedRef.current) {
+        setSubmitted(true);
+        setHasApplied(true);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit application');
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to submit application');
+      }
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -135,12 +185,12 @@ export default function ApplyJobPage() {
   return (
     <ProtectedRoute requireRole="Candidate">
       <Layout>
-        <div className="py-12 px-4">
-          <div className="container mx-auto max-w-3xl">
+        <div className="py-8 px-4">
+          <div className="container mx-auto max-w-6xl">
             {/* Back Button */}
             <button
               onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all mb-8"
+              className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all mb-6"
             >
               <ArrowLeft size={20} />
               Back
@@ -180,38 +230,223 @@ export default function ApplyJobPage() {
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="bg-white border border-border rounded-xl p-8">
-                {/* Header */}
-                <div className="mb-8 pb-8 border-b border-border">
-                  <h1 className="text-3xl font-bold text-foreground mb-2">
-                    Apply to {job.title}
-                  </h1>
-                  <p className="text-muted-foreground">
-                    at {job.company?.name} • {job.location_text}
-                  </p>
-                </div>
-
-                {/* Info Box */}
-                <div className="bg-blue-50 border border-primary/20 rounded-lg p-4 mb-8">
-                  <p className="text-sm text-foreground">
-                    <strong>Note:</strong> Your profile will be updated with information you provide in this application. You can review and edit your profile at any time.
-                  </p>
-                </div>
-
-                {/* Error Message */}
-                {error && (
-                  <div className="mb-8 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <p className="text-sm text-destructive">{error}</p>
+            ) : hasApplied ? (
+              <div className="bg-white border border-border rounded-xl p-8 text-center">
+                <div className="flex justify-center mb-6">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                    <CheckCircle size={32} className="text-blue-600" />
                   </div>
-                )}
+                </div>
+                <h1 className="text-3xl font-bold text-foreground mb-3">Already Applied</h1>
+                <p className="text-muted-foreground text-lg mb-4">
+                  You have already applied to the {job.title} position at {job.company?.name}.
+                </p>
+                <p className="text-muted-foreground mb-8">
+                  You can track your application status in your profile.
+                </p>
+                <div className="flex gap-4 justify-center">
+                  <Button variant="outline" onClick={() => navigate('/profile')}>
+                    View My Applications
+                  </Button>
+                  <Button onClick={() => navigate('/')}>
+                    Browse More Jobs
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Job Details */}
+                <div className="lg:col-span-1">
+                  <Card className="sticky top-8">
+                    <CardHeader>
+                      <CardTitle className="text-xl">{job.title}</CardTitle>
+                      <CardDescription className="flex items-center gap-2">
+                        <Building size={16} />
+                        {job.company?.name}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin size={16} className="text-muted-foreground" />
+                        {job.location_text}
+                      </div>
+                      
+                      {job.salary_range && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <DollarSign size={16} className="text-muted-foreground" />
+                          {job.salary_range}
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-2 text-sm">
+                        <Briefcase size={16} className="text-muted-foreground" />
+                        {job.job_type?.name}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-sm">
+                        <Users size={16} className="text-muted-foreground" />
+                        {job.experience_level?.name}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar size={16} className="text-muted-foreground" />
+                        Posted {new Date(job.created_at).toLocaleDateString()}
+                      </div>
+                      
+                      <div className="pt-4 border-t">
+                        <h4 className="font-medium mb-2">Description</h4>
+                        <p className="text-sm text-muted-foreground line-clamp-4">
+                          {job.description}
+                        </p>
+                      </div>
+                      
+                      {job.requirements && (
+                        <div className="pt-4 border-t">
+                          <h4 className="font-medium mb-2">Requirements</h4>
+                          <p className="text-sm text-muted-foreground line-clamp-4">
+                            {job.requirements}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {job.benefits && (
+                        <div className="pt-4 border-t">
+                          <h4 className="font-medium mb-2">Benefits</h4>
+                          <p className="text-sm text-muted-foreground line-clamp-4">
+                            {job.benefits}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {/* Application Form */}
-                <DynamicApplicationForm
-                  fields={job.form_fields}
-                  onSubmit={handleSubmit}
-                  isLoading={submitting}
-                />
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Application Form</CardTitle>
+                      <CardDescription>
+                        Please fill out the form below to apply for this position.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Enhanced Profile Section */}
+                      {candidateProfile && (
+                        <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="font-medium text-lg">Your Current Profile</h4>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => navigate('/profile')}
+                              className="text-xs"
+                            >
+                              Edit Full Profile
+                            </Button>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                            {/* Basic Information */}
+                            <div className="space-y-2">
+                              <h5 className="font-medium text-blue-800">Basic Information</h5>
+                              <div><span className="font-medium">Name:</span> {candidateProfile.first_name || 'Not set'} {candidateProfile.last_name || ''}</div>
+                              <div><span className="font-medium">Email:</span> {candidateProfile.user?.email}</div>
+                              <div><span className="font-medium">Phone:</span> {candidateProfile.phone || 'Not set'}</div>
+                            </div>
+                            
+                            {/* Location */}
+                            <div className="space-y-2">
+                              <h5 className="font-medium text-blue-800">Location</h5>
+                              <div><span className="font-medium">Country:</span> {candidateProfile.country?.name || 'Not set'}</div>
+                              <div><span className="font-medium">City:</span> {candidateProfile.city?.name || 'Not set'}</div>
+                              <div><span className="font-medium">Area:</span> {candidateProfile.area?.name || 'Not set'}</div>
+                            </div>
+                            
+                            {/* Online Presence */}
+                            <div className="space-y-2">
+                              <h5 className="font-medium text-blue-800">Online Presence</h5>
+                              {candidateProfile.linkedin_url && (
+                                <div><span className="font-medium">LinkedIn:</span> Available</div>
+                              )}
+                              {candidateProfile.github_url && (
+                                <div><span className="font-medium">GitHub:</span> Available</div>
+                              )}
+                              {candidateProfile.portfolio_url && (
+                                <div><span className="font-medium">Portfolio:</span> Available</div>
+                              )}
+                              {!candidateProfile.linkedin_url && !candidateProfile.github_url && !candidateProfile.portfolio_url && (
+                                <div className="text-muted-foreground">No links provided</div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Skills Section */}
+                          {candidateProfile.skills && candidateProfile.skills.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-blue-200">
+                              <h5 className="font-medium text-blue-800 mb-2">Skills</h5>
+                              <div className="flex flex-wrap gap-2">
+                                {candidateProfile.skills.map((skill, index) => (
+                                  <span 
+                                    key={index} 
+                                    className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                  >
+                                    {skill.skill?.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Bio Section */}
+                          {candidateProfile.bio && (
+                            <div className="mt-4 pt-4 border-t border-blue-200">
+                              <h5 className="font-medium text-blue-800 mb-2">Bio</h5>
+                              <p className="text-sm text-blue-700 line-clamp-3">{candidateProfile.bio}</p>
+                            </div>
+                          )}
+                          
+                          <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                            <p className="text-xs text-blue-800">
+                              <strong>💡 Tip:</strong> Your profile information is used to pre-fill the application form. 
+                              Any changes you make in the form will automatically update your profile for future applications.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Applications Error Warning */}
+                      {applicationsError && (
+                        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle size={16} className="text-amber-600 mt-0.5" />
+                            <div>
+                              <p className="text-sm text-amber-800 font-medium">Application Status Unavailable</p>
+                              <p className="text-xs text-amber-700 mt-1">
+                                We couldn't check if you've already applied to this job. If you've applied before, please avoid duplicate applications.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Message */}
+                      {error && (
+                        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                          <p className="text-sm text-destructive">{error}</p>
+                        </div>
+                      )}
+
+                      {/* Application Form */}
+                      <DynamicApplicationForm
+                        fields={job.form_fields}
+                        onSubmit={handleSubmit}
+                        isLoading={submitting}
+                        candidateProfile={candidateProfile}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             )}
           </div>

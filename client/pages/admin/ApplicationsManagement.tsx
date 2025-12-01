@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
-import { adminApi } from '@/services/api';
+import { applicationsApi, adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,85 +78,39 @@ export default function ApplicationsManagement() {
   const loadApplications = async () => {
     try {
       setLoading(true);
-      // In real implementation, this would call the actual API
-      // For now, using mock data
-      const mockApplications: Application[] = [
-        {
-          id: 1,
-          job_id: 1,
-          job_title: 'Senior Frontend Developer',
-          candidate_name: 'John Doe',
-          candidate_email: 'john.doe@email.com',
-          candidate_phone: '+1 (555) 123-4567',
-          status: 'reviewing',
-          applied_at: '2024-01-15T10:00:00Z',
-          updated_at: '2024-01-16T14:30:00Z',
-          resume_url: '/resumes/john_doe_resume.pdf',
-          cover_letter: 'I am excited to apply for this position...',
-          experience: '5 years of frontend development experience...',
-          education: 'Bachelor of Computer Science',
-          skills: 'React, TypeScript, Node.js, CSS',
-          notes: 'Strong candidate, good portfolio',
-          interview_date: '2024-01-20T10:00:00Z'
-        },
-        {
-          id: 2,
-          job_id: 1,
-          job_title: 'Senior Frontend Developer',
-          candidate_name: 'Jane Smith',
-          candidate_email: 'jane.smith@email.com',
-          candidate_phone: '+1 (555) 987-6543',
-          status: 'pending',
-          applied_at: '2024-01-14T15:30:00Z',
-          updated_at: '2024-01-14T15:30:00Z',
-          resume_url: '/resumes/jane_smith_resume.pdf',
-          cover_letter: 'Interested in the frontend position...',
-          experience: '3 years of web development...',
-          education: 'Master of Software Engineering',
-          skills: 'Vue.js, JavaScript, HTML, CSS',
-          notes: ''
-        },
-        {
-          id: 3,
-          job_id: 2,
-          job_title: 'Product Manager',
-          candidate_name: 'Mike Johnson',
-          candidate_email: 'mike.johnson@email.com',
-          candidate_phone: '+1 (555) 456-7890',
-          status: 'accepted',
-          applied_at: '2024-01-13T09:15:00Z',
-          updated_at: '2024-01-17T16:45:00Z',
-          resume_url: '/resumes/mike_johnson_resume.pdf',
-          cover_letter: 'Experienced product manager...',
-          experience: '7 years in product management...',
-          education: 'MBA from Stanford',
-          skills: 'Product Strategy, Agile, Data Analysis',
-          notes: 'Excellent fit for the team',
-          interview_date: '2024-01-15T14:00:00Z'
-        },
-        {
-          id: 4,
-          job_id: 1,
-          job_title: 'Senior Frontend Developer',
-          candidate_name: 'Sarah Wilson',
-          candidate_email: 'sarah.wilson@email.com',
-          candidate_phone: '+1 (555) 321-6547',
-          status: 'rejected',
-          applied_at: '2024-01-12T11:20:00Z',
-          updated_at: '2024-01-14T09:30:00Z',
-          resume_url: '/resumes/sarah_wilson_resume.pdf',
-          cover_letter: 'Frontend developer with experience...',
-          experience: '2 years of development...',
-          education: 'Bachelor of Information Technology',
-          skills: 'HTML, CSS, basic JavaScript',
-          notes: 'Not enough experience for senior role',
-          rejection_reason: 'Insufficient experience level'
-        }
-      ];
+      const filters: any = {};
+      
+      if (search) filters.search = search;
+      if (selectedStatus && selectedStatus !== 'all') filters.status_id = selectedStatus;
+      if (selectedJob && selectedJob !== 'all') filters.job_id = selectedJob;
+      
+      const response = await applicationsApi.getApplications(filters);
+      const applicationsData = response.applications || [];
+      
+      // Transform data to match the interface
+      const transformedApplications = applicationsData.map((app: any) => ({
+        id: app.id,
+        job_id: app.job_id,
+        job_title: app.job?.title || 'Unknown Job',
+        candidate_name: app.candidateName || app.candidate?.email || 'Unknown',
+        candidate_email: app.candidateEmail || app.candidate?.email || 'Unknown',
+        candidate_phone: app.candidate?.phone || 'Not provided',
+        status: app.status?.name?.toLowerCase() || 'pending',
+        applied_at: app.created_at,
+        updated_at: app.updated_at,
+        resume_url: app.resume_url || '',
+        cover_letter: app.cover_letter || '',
+        experience: app.experience || '',
+        education: app.education || '',
+        skills: app.skills || '',
+        notes: app.notes || '',
+        interview_date: app.interview_date || '',
+        rejection_reason: app.rejection_reason || ''
+      }));
 
-      setApplications(mockApplications);
-      setTotalPages(Math.ceil(mockApplications.length / itemsPerPage));
-      setTotalApplications(mockApplications.length);
+      setApplications(transformedApplications);
+      setTotalPages(Math.ceil(transformedApplications.length / itemsPerPage));
+      setTotalApplications(transformedApplications.length);
     } catch (error) {
       console.error('Failed to load applications:', error);
     } finally {

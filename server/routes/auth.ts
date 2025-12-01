@@ -1,3 +1,4 @@
+// server/routes/auth.ts
 import { RequestHandler } from 'express';
 import { AuthService } from '../services/authService';
 import { AuthRequest } from '../middleware/auth';

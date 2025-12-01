@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
-import { adminApi } from '@/services/api';
+import { adminApi, jobsApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,59 +74,44 @@ export default function JobsManagement() {
   const loadJobs = async () => {
     try {
       setLoading(true);
-      // In real implementation, this would call the actual API
-      // For now, using mock data
-      const mockJobs: Job[] = [
-        {
-          id: 1,
-          title: 'Senior Frontend Developer',
-          description: 'We are looking for an experienced frontend developer...',
-          department: 'Engineering',
-          location: 'New York, NY',
-          job_type: 'full-time',
-          salary_min: 80000,
-          salary_max: 120000,
-          status: 'active',
-          created_at: '2024-01-15T10:00:00Z',
-          updated_at: '2024-01-15T10:00:00Z',
-          applications_count: 45,
-          posted_by: 'john.doe@company.com'
-        },
-        {
-          id: 2,
-          title: 'Product Manager',
-          description: 'Join our product team to drive innovation...',
-          department: 'Product',
-          location: 'San Francisco, CA',
-          job_type: 'full-time',
-          salary_min: 100000,
-          salary_max: 150000,
-          status: 'active',
-          created_at: '2024-01-14T15:30:00Z',
-          updated_at: '2024-01-14T15:30:00Z',
-          applications_count: 32,
-          posted_by: 'jane.smith@company.com'
-        },
-        {
-          id: 3,
-          title: 'UX Designer',
-          description: 'Creative UX designer needed for exciting projects...',
-          department: 'Design',
-          location: 'Remote',
-          job_type: 'contract',
-          salary_min: 60,
-          salary_max: 80,
-          status: 'draft',
-          created_at: '2024-01-13T09:15:00Z',
-          updated_at: '2024-01-13T09:15:00Z',
-          applications_count: 0,
-          posted_by: 'mike.wilson@company.com'
-        }
-      ];
+      const filters: any = {};
+      
+      if (search) filters.search = search;
+      if (selectedStatus && selectedStatus !== 'all') {
+        // Map status string to ID
+        const statusMap: Record<string, number> = {
+          'active': 1,
+          'inactive': 2,
+          'draft': 3
+        };
+        filters.status_id = statusMap[selectedStatus];
+      }
+      if (selectedDepartment && selectedDepartment !== 'all') filters.department = selectedDepartment;
+      if (selectedJobType && selectedJobType !== 'all') filters.job_type = selectedJobType;
+      
+      const response = await jobsApi.getJobs(currentPage, itemsPerPage, filters) as any;
+      const jobsData = response.data || [];
+      
+      // Transform data to match interface
+      const transformedJobs = jobsData.map((job: any) => ({
+        id: job.id,
+        title: job.title,
+        description: job.description,
+        department: job.department?.name || 'Unknown',
+        location: job.location_text || 'Unknown',
+        job_type: job.job_type?.name || 'Unknown',
+        salary_min: parseInt(job.salary_range?.split('-')[0]) || 0,
+        salary_max: parseInt(job.salary_range?.split('-')[1]) || 0,
+        status: job.status?.name?.toLowerCase() || 'unknown',
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        applications_count: job.applications_count || 0,
+        posted_by: job.created_by?.email || 'Unknown'
+      }));
 
-      setJobs(mockJobs);
-      setTotalPages(Math.ceil(mockJobs.length / itemsPerPage));
-      setTotalJobs(mockJobs.length);
+      setJobs(transformedJobs);
+      setTotalPages(response.totalPages || 1);
+      setTotalJobs(response.total || 0);
     } catch (error) {
       console.error('Failed to load jobs:', error);
     } finally {

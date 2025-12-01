@@ -1,10 +1,11 @@
+// server/index.ts
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
 import { handleLogin, handleSignup, handleSocialLogin, handleValidateToken, handleRefreshToken, handleSendOTP, handleVerifyOTP, handleSignupWithOTP } from "./routes/auth";
 import { handleGetJobs, handleGetJob, handleCreateJob, handleUpdateJob, handleDeleteJob, handleGetJobStats } from "./routes/jobs";
-import {
+import { 
   handleGetJobStatuses,
   handleGetJobTypes,
   handleGetExperienceLevels,
@@ -13,10 +14,14 @@ import {
   handleGetApplicationStatuses,
   handleGetSkills,
   handleGetIndustries,
+  handleGetCountries,
+  handleGetCities,
+  handleGetAreas,
   handleCreateSkill
 } from "./routes/lookup";
 import { 
   handleGetUsers, 
+  handleCreateUser,
   handleUpdateUserStatus, 
   handleUpdateUserRole, 
   handleGetSystemStats, 
@@ -30,14 +35,20 @@ import {
   handleUploadFile,
   handleAddSkill,
   handleRemoveSkill,
-  handleWithdrawApplication
+  handleAddEducation,
+  handleUpdateEducation,
+  handleDeleteEducation,
+  handleAddAchievement,
+  handleUpdateAchievement,
+  handleDeleteAchievement
 } from "./routes/candidate";
 import { 
   handleGetApplications, 
   handleGetApplication, 
   handleSubmitApplication, 
   handleUpdateApplicationStatus, 
-  handleGetApplicationStats 
+  handleGetApplicationStats,
+  handleWithdrawApplication
 } from "./routes/applications";
 import { authenticateToken, optionalAuth, requireRole } from "./middleware/auth";
 import { testConnection } from "./config/database";
@@ -46,7 +57,12 @@ export function createServer() {
   const app = express();
 
   // Middleware
-  app.use(cors());
+  app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+      ? process.env.FRONTEND_URL 
+      : true,
+    credentials: true
+  }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -85,6 +101,12 @@ export function createServer() {
   app.post("/api/candidate/upload", authenticateToken, handleUploadFile);
   app.post("/api/candidate/skills", authenticateToken, handleAddSkill);
   app.delete("/api/candidate/skills/:skillId", authenticateToken, handleRemoveSkill);
+  app.post("/api/candidate/education", authenticateToken, handleAddEducation);
+  app.put("/api/candidate/education/:id", authenticateToken, handleUpdateEducation);
+  app.delete("/api/candidate/education/:id", authenticateToken, handleDeleteEducation);
+  app.post("/api/candidate/achievements", authenticateToken, handleAddAchievement);
+  app.put("/api/candidate/achievements/:id", authenticateToken, handleUpdateAchievement);
+  app.delete("/api/candidate/achievements/:id", authenticateToken, handleDeleteAchievement);
   app.delete("/api/applications/:applicationId/withdraw", authenticateToken, handleWithdrawApplication);
 
   // Application routes
@@ -103,10 +125,14 @@ export function createServer() {
   app.get("/api/lookup/application-statuses", handleGetApplicationStatuses);
   app.get("/api/lookup/skills", handleGetSkills);
   app.get("/api/lookup/industries", handleGetIndustries);
+  app.get("/api/lookup/countries", handleGetCountries);
+  app.get("/api/lookup/cities", handleGetCities);
+  app.get("/api/lookup/areas", handleGetAreas);
   app.post("/api/lookup/skills", authenticateToken, handleCreateSkill);
 
   // Super Admin routes
   app.get("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleGetUsers);
+  app.post("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleCreateUser);
   app.put("/api/admin/users/:id/status", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserStatus);
   app.put("/api/admin/users/:id/role", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserRole);
   app.get("/api/admin/stats", authenticateToken, requireRole(['SuperAdmin']), handleGetSystemStats);

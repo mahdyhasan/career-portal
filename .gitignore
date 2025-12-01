@@ -25,3 +25,15 @@ dist-ssr
 
 .config/
 !.env
+
+# Security: Prevent committing sensitive JSON files with tokens
+*.json
+!package.json
+!components.json
+!tsconfig.json
+!tailwind.config.ts
+!vite.config.ts
+!vite.config.server.ts
+!netlify.toml
+!.prettierrc
+!.npmrc

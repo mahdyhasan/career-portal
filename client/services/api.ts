@@ -1,5 +1,4 @@
-// API service functions for the career portal
-
+// client/services/api.ts
 // Import types from shared API
 import type { 
   Company, 
@@ -68,17 +67,226 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
   try {
     const response = await fetch(url, config);
     
+    // Handle non-JSON responses (like HTML error pages)
+    const contentType = response.headers.get('content-type');
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      // Try to parse error response
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch {
+        // If JSON parsing fails, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
     }
     
-    return await response.json();
+    // Check if response is JSON
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    } else {
+      // Handle non-JSON responses
+      throw new Error(`Server returned non-JSON response: ${response.status}`);
+    }
   } catch (error) {
     console.error(`API Error (${endpoint}):`, error);
     throw error;
   }
 }
+
+// Applications API
+export const applicationsApi = {
+  submitApplication: async (applicationData: SubmitApplicationRequest) => {
+    return apiFetch<Application>('/applications', {
+      method: 'POST',
+      body: JSON.stringify(applicationData),
+    });
+  },
+  
+  getApplications: async (filters?: CandidateFilters) => {
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.status_id) params.append('status_id', filters.status_id.toString());
+      if (filters.job_id) params.append('job_id', filters.job_id.toString());
+      if (filters.candidate_user_id) params.append('candidate_user_id', filters.candidate_user_id.toString());
+      if (filters.skills) params.append('skills', filters.skills.join(','));
+      if (filters.location?.country_id) params.append('country_id', filters.location.country_id.toString());
+      if (filters.location?.city_id) params.append('city_id', filters.location.city_id.toString());
+      if (filters.location?.area_id) params.append('area_id', filters.location.area_id.toString());
+      if (filters.created_after) params.append('created_after', filters.created_after);
+      if (filters.created_before) params.append('created_before', filters.created_before);
+      
+      return apiFetch<ApplicationsListResponse>(`/applications?${params.toString()}`);
+    }
+    return apiFetch<ApplicationsListResponse>('/applications');
+  },
+  
+  getApplicationById: async (id: number): Promise<Application> => {
+    return apiFetch<Application>(`/applications/${id}`);
+  },
+  
+  updateApplicationStatus: async (id: number, statusData: UpdateApplicationStatusRequest) => {
+    return apiFetch(`/applications/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify(statusData),
+    });
+  },
+  
+  submitApplicationFeedback: async (id: number, feedbackData: ApplicationFeedbackRequest) => {
+    return apiFetch(`/applications/${id}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(feedbackData),
+    });
+  },
+};
+
+// Candidate Profile API
+export const candidateApi = {
+  getProfile: async () => {
+    return apiFetch('/candidate/profile');
+  },
+
+  getMyProfile: async (): Promise<CandidateProfile> => {
+    return apiFetch('/candidate/profile');
+  },
+  
+  updateProfile: async (profileData: CandidateProfileUpdateRequest) => {
+    return apiFetch<CandidateProfile>('/candidate/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  },
+  
+  addEducation: async (educationData: CandidateEducationRequest) => {
+    return apiFetch('/candidate/education', {
+      method: 'POST',
+      body: JSON.stringify(educationData),
+    });
+  },
+  
+  updateEducation: async (id: number, educationData: CandidateEducationRequest) => {
+    return apiFetch(`/candidate/education/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(educationData),
+    });
+  },
+  
+  deleteEducation: async (id: number) => {
+    return apiFetch(`/candidate/education/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  
+  addAchievement: async (achievementData: CandidateAchievementRequest) => {
+    return apiFetch('/candidate/achievements', {
+      method: 'POST',
+      body: JSON.stringify(achievementData),
+    });
+  },
+  
+  updateAchievement: async (id: number, achievementData: CandidateAchievementRequest) => {
+    return apiFetch(`/candidate/achievements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(achievementData),
+    });
+  },
+  
+  deleteAchievement: async (id: number) => {
+    return apiFetch(`/candidate/achievements/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  
+  addSkill: async (skillData: CandidateSkillRequest) => {
+    return apiFetch('/candidate/skills', {
+      method: 'POST',
+      body: JSON.stringify(skillData),
+    });
+  },
+  
+  removeSkill: async (skillId: number) => {
+    return apiFetch(`/candidate/skills/${skillId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  withdrawApplication: async (applicationId: number) => {
+    return apiFetch(`/applications/${applicationId}/withdraw`, {
+      method: 'DELETE',
+    });
+  },
+  
+  uploadFile: async (file: File): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return apiFetch('/candidate/upload', {
+      method: 'POST',
+      body: formData,
+      headers: {}, // Let browser set Content-Type for FormData
+    });
+  },
+};
+
+// Auth API
+export const authApi = {
+  login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+    return apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
+  
+  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
+    return apiFetch('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+  
+  logout: async () => {
+    return apiFetch('/auth/logout', {
+      method: 'POST',
+    });
+  },
+  
+  refreshToken: async (): Promise<AuthResponse> => {
+    return apiFetch('/auth/refresh', {
+      method: 'POST',
+    });
+  },
+  
+  getCurrentUser: async (): Promise<User> => {
+    return apiFetch('/auth/me');
+  },
+
+  validateToken: async (): Promise<{ valid: boolean }> => {
+    return apiFetch('/auth/validate');
+  },
+
+  sendOTP: async (email: string): Promise<{ message: string }> => {
+    return apiFetch('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  verifyOTP: async (email: string, otp: string): Promise<{ valid: boolean }> => {
+    return apiFetch('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  },
+
+  signupWithOTP: async (userData: { email: string; password: string; firstName?: string; lastName?: string; otp: string }): Promise<AuthResponse> => {
+    return apiFetch('/auth/signup-with-otp', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+};
 
 // Jobs API
 export const jobsApi = {
@@ -182,198 +390,6 @@ export const lookupApi = {
     return apiFetch('/lookup/skills', {
       method: 'POST',
       body: JSON.stringify(skillData),
-    });
-  },
-};
-
-// Applications API
-export const applicationsApi = {
-  submitApplication: async (applicationData: SubmitApplicationRequest) => {
-    return apiFetch<Application>('/applications', {
-      method: 'POST',
-      body: JSON.stringify(applicationData),
-    });
-  },
-  
-  getApplications: async (filters?: CandidateFilters) => {
-    if (filters) {
-      const params = new URLSearchParams();
-      if (filters.search) params.append('search', filters.search);
-      if (filters.status_id) params.append('status_id', filters.status_id.toString());
-      if (filters.job_id) params.append('job_id', filters.job_id.toString());
-      if (filters.skills) params.append('skills', filters.skills.join(','));
-      if (filters.location?.country_id) params.append('country_id', filters.location.country_id.toString());
-      if (filters.location?.city_id) params.append('city_id', filters.location.city_id.toString());
-      if (filters.location?.area_id) params.append('area_id', filters.location.area_id.toString());
-      if (filters.created_after) params.append('created_after', filters.created_after);
-      if (filters.created_before) params.append('created_before', filters.created_before);
-      
-      return apiFetch<ApplicationsListResponse>(`/applications?${params.toString()}`);
-    }
-    return apiFetch<ApplicationsListResponse>('/applications');
-  },
-  
-  getApplicationById: async (id: number): Promise<Application> => {
-    return apiFetch(`/applications/${id}`);
-  },
-  
-  updateApplicationStatus: async (id: number, statusData: UpdateApplicationStatusRequest) => {
-    return apiFetch(`/applications/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify(statusData),
-    });
-  },
-  
-  submitApplicationFeedback: async (id: number, feedbackData: ApplicationFeedbackRequest) => {
-    return apiFetch(`/applications/${id}/feedback`, {
-      method: 'POST',
-      body: JSON.stringify(feedbackData),
-    });
-  },
-};
-
-// Auth API
-export const authApi = {
-  login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
-    return apiFetch('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-  },
-  
-  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
-    return apiFetch('/auth/signup', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-  },
-  
-  logout: async () => {
-    return apiFetch('/auth/logout', {
-      method: 'POST',
-    });
-  },
-  
-  refreshToken: async (): Promise<AuthResponse> => {
-    return apiFetch('/auth/refresh', {
-      method: 'POST',
-    });
-  },
-  
-  getCurrentUser: async (): Promise<User> => {
-    return apiFetch('/auth/me');
-  },
-
-  validateToken: async (): Promise<{ valid: boolean }> => {
-    return apiFetch('/auth/validate');
-  },
-
-  sendOTP: async (email: string): Promise<{ message: string }> => {
-    return apiFetch('/auth/send-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-  },
-
-  verifyOTP: async (email: string, otp: string): Promise<{ valid: boolean }> => {
-    return apiFetch('/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp }),
-    });
-  },
-
-  signupWithOTP: async (userData: { email: string; password: string; firstName?: string; lastName?: string; otp: string }): Promise<AuthResponse> => {
-    return apiFetch('/auth/signup-with-otp', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-  },
-};
-
-// Candidate Profile API
-export const candidateApi = {
-  getProfile: async () => {
-    return apiFetch('/candidate/profile');
-  },
-
-  getMyProfile: async (): Promise<CandidateProfile> => {
-    return apiFetch('/candidate/profile');
-  },
-  
-  updateProfile: async (profileData: CandidateProfileUpdateRequest) => {
-    return apiFetch<CandidateProfile>('/candidate/profile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  },
-  
-  addEducation: async (educationData: CandidateEducationRequest) => {
-    return apiFetch('/candidate/education', {
-      method: 'POST',
-      body: JSON.stringify(educationData),
-    });
-  },
-  
-  updateEducation: async (id: number, educationData: CandidateEducationRequest) => {
-    return apiFetch(`/candidate/education/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(educationData),
-    });
-  },
-  
-  deleteEducation: async (id: number) => {
-    return apiFetch(`/candidate/education/${id}`, {
-      method: 'DELETE',
-    });
-  },
-  
-  addAchievement: async (achievementData: CandidateAchievementRequest) => {
-    return apiFetch('/candidate/achievements', {
-      method: 'POST',
-      body: JSON.stringify(achievementData),
-    });
-  },
-  
-  updateAchievement: async (id: number, achievementData: CandidateAchievementRequest) => {
-    return apiFetch(`/candidate/achievements/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(achievementData),
-    });
-  },
-  
-  deleteAchievement: async (id: number) => {
-    return apiFetch(`/candidate/achievements/${id}`, {
-      method: 'DELETE',
-    });
-  },
-  
-  addSkill: async (skillData: CandidateSkillRequest) => {
-    return apiFetch('/candidate/skills', {
-      method: 'POST',
-      body: JSON.stringify(skillData),
-    });
-  },
-  
-  removeSkill: async (skillId: number) => {
-    return apiFetch(`/candidate/skills/${skillId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  withdrawApplication: async (applicationId: number) => {
-    return apiFetch(`/applications/${applicationId}/withdraw`, {
-      method: 'DELETE',
-    });
-  },
-  
-  uploadFile: async (file: File): Promise<FileUploadResponse> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    return apiFetch('/candidate/upload', {
-      method: 'POST',
-      body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
     });
   },
 };

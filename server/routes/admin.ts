@@ -2,10 +2,108 @@ import { RequestHandler } from 'express';
 import { AuthService } from '../services/authService';
 import { User, Role, PaginatedResponse } from '@shared/api';
 import { requireRole } from '../middleware/auth';
+import { executeQuery, executeSingleQuery } from '../config/database';
 
 // ==========================================
 // USER MANAGEMENT
 // ==========================================
+
+export const handleCreateUser: RequestHandler = async (req, res) => {
+  try {
+    const { email, password, role_id, first_name, last_name, phone } = req.body;
+    
+    // Validate required fields
+    if (!email || !password || !role_id) {
+      return res.status(400).json({ 
+        message: 'Email, password, and role_id are required', 
+        code: 'MISSING_REQUIRED_FIELDS' 
+      });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        message: 'Invalid email format', 
+        code: 'INVALID_EMAIL' 
+      });
+    }
+    
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        message: 'Password must be at least 6 characters long', 
+        code: 'SHORT_PASSWORD' 
+      });
+    }
+    
+    // Check if email already exists
+    const existingUser = await executeQuery(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+    
+    if (existingUser.length > 0) {
+      return res.status(409).json({ 
+        message: 'Email already exists', 
+        code: 'EMAIL_EXISTS' 
+      });
+    }
+    
+    // Validate role exists
+    const roleResult = await executeQuery(
+      'SELECT id, name FROM roles WHERE id = ?',
+      [role_id]
+    );
+    
+    if (!roleResult.length) {
+      return res.status(400).json({ 
+        message: 'Invalid role', 
+        code: 'INVALID_ROLE' 
+      });
+    }
+    
+    // Hash password using AuthService
+    const password_hash = await AuthService.hashPassword(password);
+    
+    // Start transaction
+    await executeSingleQuery('START TRANSACTION');
+    
+    try {
+      // Create user
+      const userResult = await executeSingleQuery(
+        'INSERT INTO users (email, password_hash, role_id, is_active, created_at, updated_at) VALUES (?, ?, ?, TRUE, NOW(), NOW())',
+        [email, password_hash, role_id]
+      );
+      
+      // Create candidate profile if role is Candidate
+      if (roleResult[0].name === 'Candidate' && (first_name || last_name || phone)) {
+        await executeSingleQuery(
+          'INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+          [userResult.insertId, first_name || null, last_name || null, phone || null]
+        );
+      }
+      
+      await executeSingleQuery('COMMIT');
+      
+      res.status(201).json({ 
+        message: 'User created successfully',
+        user_id: userResult.insertId
+      });
+      
+    } catch (error) {
+      await executeSingleQuery('ROLLBACK');
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ 
+      message: 'Failed to create user', 
+      code: 'CREATE_USER_ERROR' 
+    });
+  }
+};
 
 export const handleGetUsers: RequestHandler = async (req, res) => {
   try {
@@ -47,9 +145,7 @@ export const handleGetUsers: RequestHandler = async (req, res) => {
       SELECT 
         u.id, u.email, u.role_id, u.is_active, u.created_at, u.updated_at,
         r.name as role_name,
-        cp.first_name, cp.last_name, cp.phone,
-        r.id as role_id,
-        r.name as role
+        cp.first_name, cp.last_name, cp.phone
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
@@ -58,8 +154,8 @@ export const handleGetUsers: RequestHandler = async (req, res) => {
       LIMIT ? OFFSET ?
     `;
     
-    const [countResult] = await global.db.execute(countQuery, params);
-    const usersResult = await global.db.execute(usersQuery, [...params, Number(limit), offset]);
+    const countResult = await executeQuery(countQuery, params);
+    const usersResult = await executeQuery(usersQuery, [...params, Number(limit), offset]);
     
     const total = countResult[0].total;
     const totalPages = Math.ceil(total / Number(limit));
@@ -89,7 +185,7 @@ export const handleUpdateUserStatus: RequestHandler = async (req, res) => {
     }
     
     // Check if user exists
-    const [existingUser] = await global.db.execute(
+    const existingUser = await executeQuery(
       'SELECT id, role_id FROM users WHERE id = ?',
       [id]
     );
@@ -100,11 +196,11 @@ export const handleUpdateUserStatus: RequestHandler = async (req, res) => {
     
     // Prevent deactivating other super admins unless you're the only one
     if (!is_active) {
-      const [superAdminCount] = await global.db.execute(
+      const superAdminCount = await executeQuery(
         'SELECT COUNT(*) as count FROM users WHERE role_id = (SELECT id FROM roles WHERE name = "SuperAdmin") AND is_active = TRUE'
       );
       
-      const userRole = await global.db.execute(
+      const userRole = await executeQuery(
         'SELECT name FROM roles WHERE id = ?',
         [existingUser[0].role_id]
       );
@@ -117,7 +213,7 @@ export const handleUpdateUserStatus: RequestHandler = async (req, res) => {
       }
     }
     
-    await global.db.execute(
+    await executeSingleQuery(
       'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?',
       [is_active, id]
     );
@@ -139,7 +235,7 @@ export const handleUpdateUserRole: RequestHandler = async (req, res) => {
     }
     
     // Validate role exists
-    const [roleResult] = await global.db.execute(
+    const roleResult = await executeQuery(
       'SELECT name FROM roles WHERE id = ?',
       [role_id]
     );
@@ -149,7 +245,7 @@ export const handleUpdateUserRole: RequestHandler = async (req, res) => {
     }
     
     // Check if user exists
-    const [existingUser] = await global.db.execute(
+    const existingUser = await executeQuery(
       'SELECT id FROM users WHERE id = ?',
       [id]
     );
@@ -158,7 +254,7 @@ export const handleUpdateUserRole: RequestHandler = async (req, res) => {
       return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
     }
     
-    await global.db.execute(
+    await executeSingleQuery(
       'UPDATE users SET role_id = ?, updated_at = NOW() WHERE id = ?',
       [role_id, id]
     );
@@ -179,7 +275,7 @@ export const handleGetSystemStats: RequestHandler = async (req, res) => {
     const stats = {};
     
     // User statistics
-    const [userStats] = await global.db.execute(`
+    const userStats = await executeQuery(`
       SELECT 
         r.name as role,
         COUNT(*) as count,
@@ -190,7 +286,7 @@ export const handleGetSystemStats: RequestHandler = async (req, res) => {
     `);
     
     // Job statistics
-    const [jobStats] = await global.db.execute(`
+    const jobStats = await executeQuery(`
       SELECT 
         js.name as status,
         COUNT(*) as count
@@ -201,7 +297,7 @@ export const handleGetSystemStats: RequestHandler = async (req, res) => {
     `);
     
     // Application statistics
-    const [applicationStats] = await global.db.execute(`
+    const applicationStats = await executeQuery(`
       SELECT 
         aps.name as status,
         COUNT(*) as count
@@ -212,7 +308,7 @@ export const handleGetSystemStats: RequestHandler = async (req, res) => {
     `);
     
     // Recent activity (last 30 days)
-    const [recentActivity] = await global.db.execute(`
+    const recentActivity = await executeQuery(`
       SELECT 
         'new_users' as type,
         COUNT(*) as count
@@ -261,8 +357,8 @@ export const handleGetSystemConfig: RequestHandler = async (req, res) => {
   try {
     // This would typically come from a configuration table
     // For now, return basic system info
-    const [versionInfo] = await global.db.execute('SELECT VERSION() as db_version');
-    const [currentTime] = await global.db.execute('SELECT NOW() as server_time');
+    const versionInfo = await executeQuery('SELECT VERSION() as db_version');
+    const currentTime = await executeQuery('SELECT NOW() as server_time');
     
     res.json({
       database: {
@@ -349,7 +445,7 @@ export const handleGetAuditLog: RequestHandler = async (req, res) => {
       LIMIT ? OFFSET ?
     `;
     
-    const [auditLog] = await global.db.execute(query, [...params, Number(limit), offset]);
+    const auditLog = await executeQuery(query, [...params, Number(limit), offset]);
     
     // Get total count
     const countQuery = `
@@ -359,7 +455,7 @@ export const handleGetAuditLog: RequestHandler = async (req, res) => {
       ${whereClause}
     `;
     
-    const [countResult] = await global.db.execute(countQuery, params);
+    const countResult = await executeQuery(countQuery, params);
     const total = countResult[0].total;
     const totalPages = Math.ceil(total / Number(limit));
     
@@ -386,7 +482,7 @@ export const handleExportData: RequestHandler = async (req, res) => {
     
     switch (type) {
       case 'users':
-        const [users] = await global.db.execute(`
+        const users = await executeQuery(`
           SELECT 
             u.id, u.email, u.is_active, u.created_at,
             r.name as role,
@@ -400,7 +496,7 @@ export const handleExportData: RequestHandler = async (req, res) => {
         break;
         
       case 'jobs':
-        const [jobs] = await global.db.execute(`
+        const jobs = await executeQuery(`
           SELECT 
             j.id, j.title, j.description, j.salary_range, j.location_text,
             j.created_at, j.updated_at,
@@ -418,7 +514,7 @@ export const handleExportData: RequestHandler = async (req, res) => {
         break;
         
       case 'applications':
-        const [applications] = await global.db.execute(`
+        const applications = await executeQuery(`
           SELECT 
             a.id, a.created_at,
             j.title as job_title,

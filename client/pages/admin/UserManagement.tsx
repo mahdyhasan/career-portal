@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import SuperAdminLayout from '@/components/admin/SuperAdminLayout';
+import { adminApi } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,42 +76,27 @@ export default function UserManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      // Mock data for now - will be replaced with actual API call
-      const mockUsers: User[] = [
-        {
-          id: 1,
-          email: 'admin@careerportal.com',
-          first_name: 'Super',
-          last_name: 'Admin',
-          role: { name: 'SuperAdmin' },
-          is_active: true,
-          created_at: '2024-01-01T00:00:00Z',
-          last_login: '2024-11-28T10:00:00Z'
-        },
-        {
-          id: 2,
-          email: 'hiring@company.com',
-          first_name: 'John',
-          last_name: 'Hiring',
-          role: { name: 'HiringManager' },
-          is_active: true,
-          created_at: '2024-02-01T00:00:00Z',
-          last_login: '2024-11-27T15:30:00Z'
-        },
-        {
-          id: 3,
-          email: 'candidate@email.com',
-          first_name: 'Jane',
-          last_name: 'Candidate',
-          role: { name: 'Candidate' },
-          is_active: true,
-          created_at: '2024-03-01T00:00:00Z',
-          last_login: '2024-11-26T09:15:00Z'
-        }
-      ];
-      setUsers(mockUsers);
-      setTotalUsers(mockUsers.length);
-      setTotalPages(1);
+      const filters: any = {};
+      if (searchQuery) filters.search = searchQuery;
+      
+      const response = await adminApi.getUsers(filters) as any;
+      const usersData = response.data || [];
+      
+      // Transform data to match interface
+      const transformedUsers = usersData.map((user: any) => ({
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role: { name: user.role_name || user.role?.name || 'Unknown' },
+        is_active: user.is_active,
+        created_at: user.created_at,
+        last_login: user.last_login
+      }));
+
+      setUsers(transformedUsers);
+      setTotalUsers(transformedUsers.length);
+      setTotalPages(Math.ceil(transformedUsers.length / 10)); // Assuming 10 users per page
     } catch (error) {
       console.error('Failed to load users:', error);
     } finally {

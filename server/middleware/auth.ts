@@ -1,3 +1,4 @@
+// server/middleware/auth.ts
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/authService';
 import { User } from '@shared/api';

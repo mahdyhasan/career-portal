@@ -104,10 +104,7 @@ export const handleGetSkills: RequestHandler = async (req, res) => {
 
     const skills = await executeQuery<any>(query, params);
     
-    res.json({
-      skills,
-      total: skills.length
-    });
+    res.json(skills);
   } catch (error) {
     console.error('Error fetching skills:', error);
     res.status(500).json({ message: 'Failed to fetch skills' });
@@ -124,6 +121,63 @@ export const handleGetIndustries: RequestHandler = async (_req, res) => {
   } catch (error) {
     console.error('Error fetching industries:', error);
     res.status(500).json({ message: 'Failed to fetch industries' });
+  }
+};
+
+// Get countries
+export const handleGetCountries: RequestHandler = async (_req, res) => {
+  try {
+    const countries = await executeQuery<any>(
+      'SELECT id, name FROM countries ORDER BY name'
+    );
+    res.json(countries);
+  } catch (error) {
+    console.error('Error fetching countries:', error);
+    res.status(500).json({ message: 'Failed to fetch countries' });
+  }
+};
+
+// Get cities by country
+export const handleGetCities: RequestHandler = async (req, res) => {
+  try {
+    const { country_id } = req.query;
+    let query = 'SELECT id, country_id, name FROM cities';
+    const params: any[] = [];
+
+    if (country_id) {
+      query += ' WHERE country_id = ?';
+      params.push(parseInt(country_id as string));
+    }
+
+    query += ' ORDER BY name';
+
+    const cities = await executeQuery<any>(query, params);
+    res.json(cities);
+  } catch (error) {
+    console.error('Error fetching cities:', error);
+    res.status(500).json({ message: 'Failed to fetch cities' });
+  }
+};
+
+// Get areas by city
+export const handleGetAreas: RequestHandler = async (req, res) => {
+  try {
+    const { city_id } = req.query;
+    let query = 'SELECT id, city_id, name FROM areas';
+    const params: any[] = [];
+
+    if (city_id) {
+      query += ' WHERE city_id = ?';
+      params.push(parseInt(city_id as string));
+    }
+
+    query += ' ORDER BY name';
+
+    const areas = await executeQuery<any>(query, params);
+    res.json(areas);
+  } catch (error) {
+    console.error('Error fetching areas:', error);
+    res.status(500).json({ message: 'Failed to fetch areas' });
   }
 };
 

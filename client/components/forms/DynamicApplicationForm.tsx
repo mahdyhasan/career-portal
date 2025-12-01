@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { JobFormField } from '@shared/api';
+import { useState, useEffect } from 'react';
+import { JobFormField, CandidateProfile } from '@shared/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,20 +10,77 @@ interface DynamicApplicationFormProps {
   fields: JobFormField[];
   onSubmit: (data: Record<string, any>) => Promise<void>;
   isLoading?: boolean;
+  candidateProfile?: CandidateProfile | null;
 }
 
 export function DynamicApplicationForm({
   fields,
   onSubmit,
   isLoading = false,
+  candidateProfile = null,
 }: DynamicApplicationFormProps) {
   const [formData, setFormData] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     fields.forEach(field => {
-      initial[field.name] = '';
+      // Pre-fill with profile data if available
+      if (candidateProfile) {
+        const fieldName = field.name.toLowerCase();
+        
+        // Map form fields to profile data
+        if (fieldName.includes('first') && fieldName.includes('name')) {
+          initial[field.name] = candidateProfile.first_name || '';
+        } else if (fieldName.includes('last') && fieldName.includes('name')) {
+          initial[field.name] = candidateProfile.last_name || '';
+        } else if (fieldName.includes('phone')) {
+          initial[field.name] = candidateProfile.phone || '';
+        } else if (fieldName.includes('bio') || fieldName.includes('cover')) {
+          initial[field.name] = candidateProfile.bio || '';
+        } else if (fieldName.includes('linkedin')) {
+          initial[field.name] = candidateProfile.linkedin_url || '';
+        } else if (fieldName.includes('github')) {
+          initial[field.name] = candidateProfile.github_url || '';
+        } else if (fieldName.includes('portfolio')) {
+          initial[field.name] = candidateProfile.portfolio_url || '';
+        } else {
+          initial[field.name] = '';
+        }
+      } else {
+        initial[field.name] = '';
+      }
     });
     return initial;
   });
+
+  // Update form data when profile changes
+  useEffect(() => {
+    if (candidateProfile) {
+      const updatedData: Record<string, any> = {};
+      fields.forEach(field => {
+        const fieldName = field.name.toLowerCase();
+        
+        // Map form fields to profile data
+        if (fieldName.includes('first') && fieldName.includes('name')) {
+          updatedData[field.name] = candidateProfile.first_name || '';
+        } else if (fieldName.includes('last') && fieldName.includes('name')) {
+          updatedData[field.name] = candidateProfile.last_name || '';
+        } else if (fieldName.includes('phone')) {
+          updatedData[field.name] = candidateProfile.phone || '';
+        } else if (fieldName.includes('bio') || fieldName.includes('cover')) {
+          updatedData[field.name] = candidateProfile.bio || '';
+        } else if (fieldName.includes('linkedin')) {
+          updatedData[field.name] = candidateProfile.linkedin_url || '';
+        } else if (fieldName.includes('github')) {
+          updatedData[field.name] = candidateProfile.github_url || '';
+        } else if (fieldName.includes('portfolio')) {
+          updatedData[field.name] = candidateProfile.portfolio_url || '';
+        } else {
+          // Keep existing value for non-profile fields
+          updatedData[field.name] = formData[field.name] || '';
+        }
+      });
+      setFormData(updatedData);
+    }
+  }, [candidateProfile, fields]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
@@ -44,8 +101,26 @@ export function DynamicApplicationForm({
 
     fields.forEach(field => {
       const value = formData[field.name];
-      if (field.is_required && !value) {
+      
+      // Required field validation
+      if (field.is_required && (!value || (typeof value === 'string' && value.trim() === ''))) {
         newErrors[field.name] = `${field.label} is required`;
+      }
+      
+      // Email validation
+      if (field.input_type?.name === 'email' && value) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+          newErrors[field.name] = `${field.label} must be a valid email address`;
+        }
+      }
+      
+      // Phone validation (basic)
+      if (field.input_type?.name === 'phone' && value) {
+        const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+        if (!phoneRegex.test(value)) {
+          newErrors[field.name] = `${field.label} must contain only valid phone number characters`;
+        }
       }
     });
 
@@ -207,11 +282,39 @@ export function DynamicApplicationForm({
             </div>
           )}
 
+          {/* Radio Button */}
+          {field.input_type?.name === 'radio' && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                {field.label}
+                {field.is_required && <span className="text-destructive ml-1">*</span>}
+              </label>
+              {field.options?.map(option => (
+                <div key={option.id} className="flex items-center gap-2">
+                  <input
+                    id={`${field.name}_${option.id}`}
+                    name={field.name}
+                    type="radio"
+                    value={option.option_value}
+                    checked={formData[field.name] === option.option_value}
+                    onChange={(e) => handleChange(field.name, e.target.value)}
+                    disabled={isLoading}
+                    className="w-4 h-4 border-border cursor-pointer"
+                  />
+                  <label htmlFor={`${field.name}_${option.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                    {option.option_label}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Checkbox */}
           {field.input_type?.name === 'checkbox' && (
             <div className="flex items-center gap-2">
               <input
                 id={field.name}
+                name={field.name}
                 type="checkbox"
                 checked={formData[field.name] || false}
                 onChange={(e) => handleChange(field.name, e.target.checked)}
