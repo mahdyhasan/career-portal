@@ -54,7 +54,10 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
       ${whereClause}
     `, queryParams);
 
-    // Get applications with pagination - simplified version to debug the issue
+    // Add pagination parameters for the main query
+    const paginationParams = [...queryParams, limit, offset];
+
+    // Get applications with pagination
     const applicationsResult = await executeQuery(`
       SELECT 
         a.id,
@@ -76,7 +79,8 @@ export const handleGetApplications: RequestHandler = async (req, res) => {
       LEFT JOIN application_statuses s ON a.status_id = s.id
       ${whereClause}
       ORDER BY a.created_at DESC
-    `, queryParams);
+      LIMIT ? OFFSET ?
+    `, paginationParams);
 
     // Process applications (without history for now since table doesn't exist)
     const applications = applicationsResult.map((app: any) => ({

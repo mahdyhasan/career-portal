@@ -86,6 +86,7 @@ export function DynamicApplicationForm({
   const [submitError, setSubmitError] = useState('');
 
   const handleChange = (name: string, value: any) => {
+    console.log('Form field changed:', name, value); // Debug log
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors(prev => {

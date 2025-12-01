@@ -1,540 +1,830 @@
-import { RequestHandler } from 'express';
-import { AuthService } from '../services/authService';
-import { User, Role, PaginatedResponse } from '@shared/api';
-import { requireRole } from '../middleware/auth';
-import { executeQuery, executeSingleQuery } from '../config/database';
+import { RequestHandler } from "express";
+import { executeQuery, executeSingleQuery } from "../config/database";
+import { AuthRequest } from "../middleware/auth";
+import { 
+  successResponse, 
+  errorResponse, 
+  authErrorResponse, 
+  authorizationErrorResponse,
+  notFoundResponse,
+  HTTP_STATUS,
+  ERROR_CODES,
+  ERROR_MESSAGES
+} from "../utils/apiResponses";
 
-// ==========================================
-// USER MANAGEMENT
-// ==========================================
-
-export const handleCreateUser: RequestHandler = async (req, res) => {
-  try {
-    const { email, password, role_id, first_name, last_name, phone } = req.body;
-    
-    // Validate required fields
-    if (!email || !password || !role_id) {
-      return res.status(400).json({ 
-        message: 'Email, password, and role_id are required', 
-        code: 'MISSING_REQUIRED_FIELDS' 
-      });
-    }
-    
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ 
-        message: 'Invalid email format', 
-        code: 'INVALID_EMAIL' 
-      });
-    }
-    
-    // Validate password length
-    if (password.length < 6) {
-      return res.status(400).json({ 
-        message: 'Password must be at least 6 characters long', 
-        code: 'SHORT_PASSWORD' 
-      });
-    }
-    
-    // Check if email already exists
-    const existingUser = await executeQuery(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
-    );
-    
-    if (existingUser.length > 0) {
-      return res.status(409).json({ 
-        message: 'Email already exists', 
-        code: 'EMAIL_EXISTS' 
-      });
-    }
-    
-    // Validate role exists
-    const roleResult = await executeQuery(
-      'SELECT id, name FROM roles WHERE id = ?',
-      [role_id]
-    );
-    
-    if (!roleResult.length) {
-      return res.status(400).json({ 
-        message: 'Invalid role', 
-        code: 'INVALID_ROLE' 
-      });
-    }
-    
-    // Hash password using AuthService
-    const password_hash = await AuthService.hashPassword(password);
-    
-    // Start transaction
-    await executeSingleQuery('START TRANSACTION');
-    
-    try {
-      // Create user
-      const userResult = await executeSingleQuery(
-        'INSERT INTO users (email, password_hash, role_id, is_active, created_at, updated_at) VALUES (?, ?, ?, TRUE, NOW(), NOW())',
-        [email, password_hash, role_id]
-      );
-      
-      // Create candidate profile if role is Candidate
-      if (roleResult[0].name === 'Candidate' && (first_name || last_name || phone)) {
-        await executeSingleQuery(
-          'INSERT INTO candidate_profiles (user_id, first_name, last_name, phone, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-          [userResult.insertId, first_name || null, last_name || null, phone || null]
-        );
-      }
-      
-      await executeSingleQuery('COMMIT');
-      
-      res.status(201).json({ 
-        message: 'User created successfully',
-        user_id: userResult.insertId
-      });
-      
-    } catch (error) {
-      await executeSingleQuery('ROLLBACK');
-      throw error;
-    }
-    
-  } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ 
-      message: 'Failed to create user', 
-      code: 'CREATE_USER_ERROR' 
-    });
-  }
-};
-
+// Get all users (SuperAdmin only)
 export const handleGetUsers: RequestHandler = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, role_id, is_active } = req.query;
-    
-    // Build query conditions
-    let whereConditions = [];
-    let params: any[] = [];
-    
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search as string || '';
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    // Build WHERE clause for search
+    let whereClause = "WHERE u.deleted_at IS NULL";
+    let queryParams: any[] = [];
+
     if (search) {
-      whereConditions.push('(u.email LIKE ? OR cp.first_name LIKE ? OR cp.last_name LIKE ?)');
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
+      whereClause += " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)";
+      queryParams = [`%${search}%`, `%${search}%`, `%${search}%`];
     }
-    
-    if (role_id) {
-      whereConditions.push('u.role_id = ?');
-      params.push(role_id);
-    }
-    
-    if (is_active !== undefined) {
-      whereConditions.push('u.is_active = ?');
-      params.push(is_active === 'true');
-    }
-    
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    
+
     // Get total count
-    const countQuery = `
-      SELECT COUNT(*) as total 
-      FROM users u 
-      LEFT JOIN candidate_profiles cp ON u.id = cp.user_id 
-      ${whereClause}
-    `;
-    
-    // Get users with pagination
-    const offset = (Number(page) - 1) * Number(limit);
-    const usersQuery = `
-      SELECT 
-        u.id, u.email, u.role_id, u.is_active, u.created_at, u.updated_at,
-        r.name as role_name,
-        cp.first_name, cp.last_name, cp.phone
+    const countResult = await executeQuery(`
+      SELECT COUNT(*) as total
       FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+      ${whereClause}
+    `, queryParams);
+
+    // Get users with pagination
+    const usersResult = await executeQuery(`
+      SELECT 
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.is_active,
+        u.created_at,
+        u.updated_at,
+        r.name as role_name
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
       ${whereClause}
       ORDER BY u.created_at DESC
       LIMIT ? OFFSET ?
-    `;
-    
-    const countResult = await executeQuery(countQuery, params);
-    const usersResult = await executeQuery(usersQuery, [...params, Number(limit), offset]);
-    
-    const total = countResult[0].total;
-    const totalPages = Math.ceil(total / Number(limit));
-    
-    const response: PaginatedResponse<User> = {
-      data: usersResult,
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages
-    };
-    
-    res.json(response);
+    `, [...queryParams, limit, offset]);
+
+    const total = countResult[0]?.total || 0;
+
+    return successResponse(res, HTTP_STATUS.OK, 'Users retrieved successfully', {
+      users: usersResult,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Failed to fetch users', code: 'FETCH_USERS_ERROR' });
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
   }
 };
 
-export const handleUpdateUserStatus: RequestHandler = async (req, res) => {
+// Create new user (SuperAdmin only)
+export const handleCreateUser: RequestHandler = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { is_active } = req.body;
-    
-    if (typeof is_active !== 'boolean') {
-      return res.status(400).json({ message: 'is_active must be a boolean', code: 'INVALID_STATUS' });
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const { 
+      email, 
+      password, 
+      first_name, 
+      last_name, 
+      role_name, 
+      phone 
+    } = req.body;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
     }
-    
-    // Check if user exists
-    const existingUser = await executeQuery(
-      'SELECT id, role_id FROM users WHERE id = ?',
-      [id]
-    );
-    
-    if (!existingUser.length) {
-      return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
-    }
-    
-    // Prevent deactivating other super admins unless you're the only one
-    if (!is_active) {
-      const superAdminCount = await executeQuery(
-        'SELECT COUNT(*) as count FROM users WHERE role_id = (SELECT id FROM roles WHERE name = "SuperAdmin") AND is_active = TRUE'
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
       );
-      
-      const userRole = await executeQuery(
-        'SELECT name FROM roles WHERE id = ?',
-        [existingUser[0].role_id]
+    }
+
+    // Validate required fields
+    if (!email || !password || !role_name) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        {
+          email: !email ? 'Email is required' : undefined,
+          password: !password ? 'Password is required' : undefined,
+          role_name: !role_name ? 'Role is required' : undefined
+        }
       );
-      
-      if (userRole[0]?.name === 'SuperAdmin' && superAdminCount[0].count <= 1) {
-        return res.status(400).json({ 
-          message: 'Cannot deactivate the last active super admin', 
-          code: 'LAST_SUPER_ADMIN' 
-        });
-      }
     }
-    
-    await executeSingleQuery(
-      'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?',
-      [is_active, id]
-    );
-    
-    res.json({ message: 'User status updated successfully' });
-  } catch (error) {
-    console.error('Error updating user status:', error);
-    res.status(500).json({ message: 'Failed to update user status', code: 'UPDATE_USER_ERROR' });
-  }
-};
 
-export const handleUpdateUserRole: RequestHandler = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { role_id } = req.body;
-    
-    if (!role_id) {
-      return res.status(400).json({ message: 'role_id is required', code: 'ROLE_ID_REQUIRED' });
+    // Validate role
+    if (!['SuperAdmin', 'HiringManager', 'Candidate'].includes(role_name)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { role_name: 'Invalid role. Must be SuperAdmin, HiringManager, or Candidate' }
+      );
     }
-    
-    // Validate role exists
-    const roleResult = await executeQuery(
-      'SELECT name FROM roles WHERE id = ?',
-      [role_id]
-    );
-    
-    if (!roleResult.length) {
-      return res.status(400).json({ message: 'Invalid role', code: 'INVALID_ROLE' });
-    }
-    
-    // Check if user exists
-    const existingUser = await executeQuery(
-      'SELECT id FROM users WHERE id = ?',
-      [id]
-    );
-    
-    if (!existingUser.length) {
-      return res.status(404).json({ message: 'User not found', code: 'USER_NOT_FOUND' });
-    }
-    
-    await executeSingleQuery(
-      'UPDATE users SET role_id = ?, updated_at = NOW() WHERE id = ?',
-      [role_id, id]
-    );
-    
-    res.json({ message: 'User role updated successfully' });
-  } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ message: 'Failed to update user role', code: 'UPDATE_ROLE_ERROR' });
-  }
-};
 
-// ==========================================
-// SYSTEM STATISTICS
-// ==========================================
+    // Check if user already exists
+    const existingUser = await executeQuery(`
+      SELECT id FROM users WHERE email = ? AND deleted_at IS NULL
+    `, [email]);
 
-export const handleGetSystemStats: RequestHandler = async (req, res) => {
-  try {
-    const stats = {};
-    
-    // User statistics
-    const userStats = await executeQuery(`
+    if (existingUser.length > 0) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.CONFLICT,
+        ERROR_MESSAGES[ERROR_CODES.DUPLICATE_RESOURCE],
+        { email: 'User with this email already exists' }
+      );
+    }
+
+    // Hash password
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Get role ID
+    const roleResult = await executeQuery(`
+      SELECT id FROM roles WHERE name = ?
+    `, [role_name]);
+
+    if (roleResult.length === 0) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.NOT_FOUND],
+        { role_name: 'Invalid role' }
+      );
+    }
+
+    const roleId = roleResult[0].id;
+
+    // Create user
+    const result = await executeSingleQuery(`
+      INSERT INTO users (email, password_hash, role_id, first_name, last_name, phone, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [email, hashedPassword, roleId, first_name, last_name, phone]);
+
+    const newUserId = result.insertId;
+
+    // Get created user
+    const userResult = await executeQuery(`
       SELECT 
-        r.name as role,
-        COUNT(*) as count,
-        COUNT(CASE WHEN is_active = TRUE THEN 1 END) as active_count
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.is_active,
+        u.created_at,
+        u.updated_at,
+        r.name as role_name
       FROM users u
       JOIN roles r ON u.role_id = r.id
-      GROUP BY r.name
+    WHERE u.id = ?
+    `, [newUserId]);
+
+    const user = userResult[0];
+
+    // Create candidate profile if role is Candidate
+    if (role_name === 'Candidate') {
+      await executeQuery(`
+        INSERT INTO candidate_profiles (user_id, first_name, last_name, created_at, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [newUserId, first_name, last_name]);
+    }
+
+    return successResponse(res, HTTP_STATUS.CREATED, 'User created successfully', user);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
+  }
+};
+
+// Update user (SuperAdmin only)
+export const handleUpdateUser: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const userIdToUpdate = parseInt(req.params.id);
+    const { 
+      email, 
+      first_name, 
+      last_name, 
+      phone, 
+      is_active 
+    } = req.body;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    if (isNaN(userIdToUpdate)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { id: 'Invalid user ID' }
+      );
+    }
+
+    // Check if user exists
+    const userExists = await executeQuery(`
+      SELECT id FROM users WHERE id = ? AND deleted_at IS NULL
+    `, [userIdToUpdate]);
+
+    if (userExists.length === 0) {
+      return notFoundResponse(res, 'User not found', 'User');
+    }
+
+    // Check if email is being updated and if it already exists
+    if (email && email !== userExists[0].email) {
+      const emailExists = await executeQuery(`
+        SELECT id FROM users WHERE email = ? AND id != ? AND deleted_at IS NULL
+      `, [email, userIdToUpdate]);
+
+      if (emailExists.length > 0) {
+        return errorResponse(
+          res,
+          HTTP_STATUS.CONFLICT,
+          ERROR_MESSAGES[ERROR_CODES.DUPLICATE_RESOURCE],
+          { email: 'User with this email already exists' }
+        );
+      }
+    }
+
+    // Update user
+    const updateFields = [];
+    const updateValues = [];
+
+    if (email !== undefined) {
+      updateFields.push('email = ?');
+      updateValues.push(email);
+    }
+
+    if (first_name !== undefined) {
+      updateFields.push('first_name = ?');
+      updateValues.push(first_name);
+    }
+
+    if (last_name !== undefined) {
+      updateFields.push('last_name = ?');
+      updateValues.push(last_name);
+    }
+
+    if (phone !== undefined) {
+      updateFields.push('phone = ?');
+      updateValues.push(phone);
+    }
+
+    if (is_active !== undefined) {
+      updateFields.push('is_active = ?');
+      updateValues.push(is_active);
+    }
+
+    updateFields.push('updated_at = CURRENT_TIMESTAMP');
+
+    await executeQuery(`
+      UPDATE users 
+      SET ${updateFields.join(', ')}
+      WHERE id = ?
+    `, [...updateValues, userIdToUpdate]);
+
+    // Get updated user
+    const userResult = await executeQuery(`
+      SELECT 
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.is_active,
+        u.created_at,
+        u.updated_at,
+        r.name as role_name
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE u.id = ?
+    `, [userIdToUpdate]);
+
+    const user = userResult[0];
+
+    return successResponse(res, HTTP_STATUS.OK, 'User updated successfully', user);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
+  }
+};
+
+// Update user status (SuperAdmin only)
+export const handleUpdateUserStatus: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const userIdToUpdate = parseInt(req.params.id);
+    const { is_active } = req.body;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    if (isNaN(userIdToUpdate)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { id: 'Invalid user ID' }
+      );
+    }
+
+    // Check if user exists
+    const userExists = await executeQuery(`
+      SELECT id FROM users WHERE id = ? AND deleted_at IS NULL
+    `, [userIdToUpdate]);
+
+    if (userExists.length === 0) {
+      return notFoundResponse(res, 'User not found', 'User');
+    }
+
+    // Update user status
+    await executeQuery(`
+      UPDATE users 
+      SET is_active = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [is_active, userIdToUpdate]);
+
+    return successResponse(res, HTTP_STATUS.OK, 'User status updated successfully');
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
+  }
+};
+
+// Update user role (SuperAdmin only)
+export const handleUpdateUserRole: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const userIdToUpdate = parseInt(req.params.id);
+    const { role_name } = req.body;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    if (isNaN(userIdToUpdate)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { id: 'Invalid user ID' }
+      );
+    }
+
+    // Check if user exists
+    const userExists = await executeQuery(`
+      SELECT id FROM users WHERE id = ? AND deleted_at IS NULL
+    `, [userIdToUpdate]);
+
+    if (userExists.length === 0) {
+      return notFoundResponse(res, 'User not found', 'User');
+    }
+
+    // Validate role
+    if (!role_name || !['SuperAdmin', 'HiringManager', 'Candidate'].includes(role_name)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { role_name: 'Invalid role. Must be SuperAdmin, HiringManager, or Candidate' }
+      );
+    }
+
+    // Get role ID
+    const roleResult = await executeQuery(`
+      SELECT id FROM roles WHERE name = ?
+    `, [role_name]);
+
+    if (roleResult.length === 0) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.NOT_FOUND],
+        { role_name: 'Invalid role' }
+      );
+    }
+
+    const roleId = roleResult[0].id;
+
+    // Update user role
+    await executeQuery(`
+      UPDATE users 
+      SET role_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [roleId, userIdToUpdate]);
+
+    // Get updated user
+    const userResult = await executeQuery(`
+      SELECT 
+        u.id,
+        u.email,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.is_active,
+        u.created_at,
+        u.updated_at,
+        r.name as role_name
+      FROM users u
+      JOIN roles r ON u.role_id = r.id
+      WHERE u.id = ?
+    `, [userIdToUpdate]);
+
+    const user = userResult[0];
+
+    return successResponse(res, HTTP_STATUS.OK, 'User role updated successfully', user);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
+  }
+};
+
+// Delete user (SuperAdmin only)
+export const handleDeleteUser: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const userIdToDelete = parseInt(req.params.id);
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    if (isNaN(userIdToDelete)) {
+      return errorResponse(
+        res,
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+        { id: 'Invalid user ID' }
+      );
+    }
+
+    // Check if user exists
+    const userExists = await executeQuery(`
+      SELECT id FROM users WHERE id = ? AND deleted_at IS NULL
+    `, [userIdToDelete]);
+
+    if (userExists.length === 0) {
+      return notFoundResponse(res, 'User not found', 'User');
+    }
+
+    // Soft delete user (set deleted_at)
+    await executeQuery(`
+      UPDATE users 
+      SET deleted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [userIdToDelete]);
+
+    return successResponse(res, HTTP_STATUS.OK, 'User deleted successfully');
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
+  }
+};
+
+// Get system statistics (SuperAdmin only)
+export const handleGetSystemStats: RequestHandler = async (req, res) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    // Get user statistics
+    const userStats = await executeQuery(`
+      SELECT 
+        COUNT(*) as total_users,
+        COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_users
+      FROM users
+      WHERE deleted_at IS NULL
     `);
-    
-    // Job statistics
+
+    // Get job statistics
     const jobStats = await executeQuery(`
       SELECT 
-        js.name as status,
-        COUNT(*) as count
-      FROM jobs j
-      JOIN job_statuses js ON j.status_id = js.id
-      WHERE j.deleted_at IS NULL
-      GROUP BY js.name
+        COUNT(*) as total_jobs,
+        COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_jobs
+      FROM jobs
+      WHERE deleted_at IS NULL
     `);
-    
-    // Application statistics
+
+    // Get application statistics
     const applicationStats = await executeQuery(`
       SELECT 
-        aps.name as status,
-        COUNT(*) as count
-      FROM applications a
-      JOIN application_statuses aps ON a.status_id = aps.id
-      WHERE a.deleted_at IS NULL
-      GROUP BY aps.name
+        COUNT(*) as total_applications,
+        COUNT(CASE WHEN status_id = 1 THEN 1 END) as pending_applications,
+        COUNT(CASE WHEN status_id = 2 THEN 1 END) as shortlisted_applications,
+        COUNT(CASE WHEN status_id = 3 THEN 1 END) as interview_applications,
+        COUNT(CASE WHEN status_id = 4 THEN 1 END) as hired_applications
+      FROM applications
+      WHERE deleted_at IS NULL
     `);
-    
-    // Recent activity (last 30 days)
-    const recentActivity = await executeQuery(`
-      SELECT 
-        'new_users' as type,
-        COUNT(*) as count
-      FROM users 
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-      
-      UNION ALL
-      
-      SELECT 
-        'new_jobs' as type,
-        COUNT(*) as count
-      FROM jobs 
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-      AND deleted_at IS NULL
-      
-      UNION ALL
-      
-      SELECT 
-        'new_applications' as type,
-        COUNT(*) as count
-      FROM applications 
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-      AND deleted_at IS NULL
-    `);
-    
-    res.json({
-      users: userStats,
-      jobs: jobStats,
-      applications: applicationStats,
-      recentActivity: recentActivity.reduce((acc, item) => {
-        acc[item.type] = item.count;
-        return acc;
-      }, {})
-    });
+
+    const stats = {
+      users: {
+        total: userStats[0]?.total_users || 0,
+        active: userStats[0]?.active_users || 0
+      },
+      jobs: {
+        total: jobStats[0]?.total_jobs || 0,
+        active: jobStats[0]?.active_jobs || 0
+      },
+      applications: {
+        total: applicationStats[0]?.total_applications || 0,
+        pending: applicationStats[0]?.pending_applications || 0,
+        shortlisted: applicationStats[0]?.shortlisted_applications || 0,
+        interview: applicationStats[0]?.interview_applications || 0,
+        hired: applicationStats[0]?.hired_applications || 0
+      }
+    };
+
+    return successResponse(res, HTTP_STATUS.OK, 'System statistics retrieved successfully', stats);
   } catch (error) {
-    console.error('Error fetching system stats:', error);
-    res.status(500).json({ message: 'Failed to fetch system statistics', code: 'STATS_ERROR' });
+    console.error('Error fetching system statistics:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
   }
 };
 
-// ==========================================
-// SYSTEM CONFIGURATION
-// ==========================================
-
+// Get system configuration (SuperAdmin only)
 export const handleGetSystemConfig: RequestHandler = async (req, res) => {
   try {
-    // This would typically come from a configuration table
-    // For now, return basic system info
-    const versionInfo = await executeQuery('SELECT VERSION() as db_version');
-    const currentTime = await executeQuery('SELECT NOW() as server_time');
-    
-    res.json({
-      database: {
-        version: versionInfo[0].db_version,
-        connection: 'active'
-      },
-      server: {
-        time: currentTime[0].server_time,
-        uptime: process.uptime()
-      },
-      features: {
-        jobPostings: true,
-        applications: true,
-        fileUploads: true,
-        socialAuth: true
-      }
-    });
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    // Get system configuration
+    const configResult = await executeQuery(`
+      SELECT 
+        site_name,
+        site_description,
+        contact_email,
+        max_file_size_mb,
+        supported_file_types
+      FROM system_config
+      WHERE id = 1
+    `);
+
+    if (configResult.length === 0) {
+      return notFoundResponse(res, 'System configuration not found', 'System configuration');
+    }
+
+    const config = configResult[0];
+
+    return successResponse(res, HTTP_STATUS.OK, 'System configuration retrieved successfully', config);
   } catch (error) {
-    console.error('Error fetching system config:', error);
-    res.status(500).json({ message: 'Failed to fetch system configuration', code: 'CONFIG_ERROR' });
+    console.error('Error fetching system configuration:', error);
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
   }
 };
 
-// ==========================================
-// AUDIT LOG
-// ==========================================
-
+// Get audit log (SuperAdmin only)
 export const handleGetAuditLog: RequestHandler = async (req, res) => {
   try {
-    const { page = 1, limit = 50, action, user_id, start_date, end_date } = req.query;
-    
-    let whereConditions = [];
-    let params: any[] = [];
-    
-    if (action) {
-      whereConditions.push('action = ?');
-      params.push(action);
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    const startDate = req.query.start_date as string;
+    const endDate = req.query.end_date as string;
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
     }
-    
-    if (user_id) {
-      whereConditions.push('user_id = ?');
-      params.push(user_id);
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
     }
-    
-    if (start_date) {
-      whereConditions.push('created_at >= ?');
-      params.push(start_date);
+
+    // Build WHERE clause for date range
+    let whereClause = "WHERE 1=1";
+    let queryParams: any[] = [];
+
+    if (startDate) {
+      whereClause += " AND created_at >= ?";
+      queryParams.push(startDate);
     }
-    
-    if (end_date) {
-      whereConditions.push('created_at <= ?');
-      params.push(end_date);
+
+    if (endDate) {
+      whereClause += " AND created_at <= ?";
+      queryParams.push(endDate);
     }
-    
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    
-    const offset = (Number(page) - 1) * Number(limit);
-    
-    // For now, return application history as audit log
-    // In a real implementation, you'd have a dedicated audit_log table
-    const query = `
-      SELECT 
-        ah.id,
-        ah.application_id,
-        ah.previous_status_id,
-        ah.new_status_id,
-        ah.changed_by_user_id as user_id,
-        ah.notes,
-        ah.created_at,
-        u.email as user_email,
-        r.name as user_role,
-        'application_status_change' as action,
-        CASE 
-          WHEN ah.previous_status_id IS NULL THEN 'Application created'
-          ELSE CONCAT('Status changed from ', ps.name, ' to ', ns.name)
-        END as description
-      FROM application_history ah
-      JOIN users u ON ah.changed_by_user_id = u.id
-      JOIN roles r ON u.role_id = r.id
-      LEFT JOIN application_statuses ps ON ah.previous_status_id = ps.id
-      LEFT JOIN application_statuses ns ON ah.new_status_id = ns.id
-      ${whereClause}
-      ORDER BY ah.created_at DESC
-      LIMIT ? OFFSET ?
-    `;
-    
-    const auditLog = await executeQuery(query, [...params, Number(limit), offset]);
-    
+
     // Get total count
-    const countQuery = `
+    const countResult = await executeQuery(`
       SELECT COUNT(*) as total
-      FROM application_history ah
-      JOIN users u ON ah.changed_by_user_id = u.id
+      FROM audit_logs
       ${whereClause}
-    `;
-    
-    const countResult = await executeQuery(countQuery, params);
-    const total = countResult[0].total;
-    const totalPages = Math.ceil(total / Number(limit));
-    
-    res.json({
-      data: auditLog,
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages
+    `, queryParams);
+
+    // Get audit logs with pagination
+    const auditResult = await executeQuery(`
+      SELECT 
+        al.id,
+        al.action,
+        al.table_name,
+        al.record_id,
+        al.old_values,
+        al.new_values,
+        al.changed_by_user_id,
+        al.created_at,
+        u.email as user_email
+      FROM audit_logs al
+      LEFT JOIN users u ON al.changed_by_user_id = u.id
+      ${whereClause}
+      ORDER BY al.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [...queryParams, limit, offset]);
+
+    const total = countResult[0]?.total || 0;
+
+    return successResponse(res, HTTP_STATUS.OK, 'Audit log retrieved successfully', {
+      audit_logs: auditResult,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
     });
   } catch (error) {
     console.error('Error fetching audit log:', error);
-    res.status(500).json({ message: 'Failed to fetch audit log', code: 'AUDIT_LOG_ERROR' });
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
   }
 };
 
-// ==========================================
-// DATA MANAGEMENT
-// ==========================================
-
+// Export data (SuperAdmin only)
 export const handleExportData: RequestHandler = async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.id;
+    const role = authReq.user?.role?.name;
     const { type } = req.query;
-    
+
+    if (!userId || !role) {
+      return authErrorResponse(res, ERROR_MESSAGES[ERROR_CODES.AUTH_REQUIRED]);
+    }
+
+    if (role !== 'SuperAdmin') {
+      return authorizationErrorResponse(
+        res,
+        ERROR_MESSAGES[ERROR_CODES.INSUFFICIENT_PERMISSIONS],
+        ['SuperAdmin']
+      );
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="export-${type}-${new Date().toISOString().split('T')[0]}.csv"`);
+
+    let data = '';
+    let headers = '';
+
     switch (type) {
       case 'users':
+        headers = 'ID,Email,First Name,Last Name,Role,Status,Created At\n';
+        
         const users = await executeQuery(`
           SELECT 
-            u.id, u.email, u.is_active, u.created_at,
-            r.name as role,
-            cp.first_name, cp.last_name, cp.phone, cp.bio
+            u.id,
+            u.email,
+            u.first_name,
+            u.last_name,
+            r.name as role_name,
+            u.is_active,
+            u.created_at
           FROM users u
-          LEFT JOIN roles r ON u.role_id = r.id
-          LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+          JOIN roles r ON u.role_id = r.id
+          WHERE u.deleted_at IS NULL
           ORDER BY u.created_at DESC
         `);
-        res.json({ data: users });
-        break;
-        
-      case 'jobs':
-        const jobs = await executeQuery(`
-          SELECT 
-            j.id, j.title, j.description, j.salary_range, j.location_text,
-            j.created_at, j.updated_at,
-            c.name as company,
-            d.name as department,
-            js.name as status
-          FROM jobs j
-          LEFT JOIN companies c ON j.company_id = c.id
-          LEFT JOIN departments d ON j.department_id = d.id
-          LEFT JOIN job_statuses js ON j.status_id = js.id
-          WHERE j.deleted_at IS NULL
-          ORDER BY j.created_at DESC
-        `);
-        res.json({ data: jobs });
+
+        data = users.map(user => 
+          `${user.id},"${user.email}","${user.first_name}","${user.last_name}","${user.role_name}","${user.is_active ? 'Active' : 'Inactive'}","${user.created_at}"`
+        ).join('\n');
         break;
         
       case 'applications':
+        headers = 'ID,Job Title,Candidate Email,Status,Created At\n';
+        
         const applications = await executeQuery(`
           SELECT 
-            a.id, a.created_at,
+            a.id,
             j.title as job_title,
             u.email as candidate_email,
-            aps.name as status
+            s.name as status_name,
+            a.created_at
           FROM applications a
-          LEFT JOIN jobs j ON a.job_id = j.id
-          LEFT JOIN users u ON a.candidate_user_id = u.id
-          LEFT JOIN application_statuses aps ON a.status_id = aps.id
+          JOIN jobs j ON a.job_id = j.id
+          JOIN users u ON a.candidate_user_id = u.id
+          LEFT JOIN application_statuses s ON a.status_id = s.id
           WHERE a.deleted_at IS NULL
           ORDER BY a.created_at DESC
         `);
-        res.json({ data: applications });
+
+        data = applications.map(app => 
+          `${app.id},"${app.job_title}","${app.candidate_email}","${app.status_name}","${app.created_at}"`
+        ).join('\n');
         break;
         
       default:
-        res.status(400).json({ message: 'Invalid export type', code: 'INVALID_EXPORT_TYPE' });
+        return errorResponse(
+          res,
+          HTTP_STATUS.BAD_REQUEST,
+          ERROR_MESSAGES[ERROR_CODES.VALIDATION_ERROR],
+          { type: 'Invalid export type. Must be users or applications' }
+        );
     }
+
+    res.send(headers + data);
   } catch (error) {
     console.error('Error exporting data:', error);
-    res.status(500).json({ message: 'Failed to export data', code: 'EXPORT_ERROR' });
+    return errorResponse(res, HTTP_STATUS.INTERNAL_SERVER_ERROR, ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR], error);
   }
 };

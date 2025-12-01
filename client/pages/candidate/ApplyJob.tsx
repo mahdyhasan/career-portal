@@ -105,10 +105,9 @@ export default function ApplyJobPage() {
       const answers: Array<{ job_form_field_id: number; answer_text?: string }> = [];
 
       Object.entries(applicationData).forEach(([key, value]) => {
-        const fieldId = parseInt(key);
+        // Find the field by name (key is field.name)
+        const field = job.form_fields?.find(f => f.name === key);
         
-        // Check if this is a profile field (based on field name patterns)
-        const field = job.form_fields?.find(f => f.id === fieldId);
         if (field) {
           const fieldName = field.name.toLowerCase();
           
@@ -128,9 +127,9 @@ export default function ApplyJobPage() {
           } else if (fieldName.includes('portfolio')) {
             profileUpdate.portfolio_url = String(value);
           } else {
-            // Regular form field
+            // Regular form field - use field.id
             answers.push({
-              job_form_field_id: fieldId,
+              job_form_field_id: field.id,
               answer_text: String(value),
             });
           }
@@ -151,7 +150,6 @@ export default function ApplyJobPage() {
       await applicationsApi.submitApplication({
         job_id: job.id,
         answers,
-        candidate_profile: Object.keys(profileUpdate).length > 0 ? profileUpdate : undefined,
       });
 
       if (isMountedRef.current) {
@@ -438,12 +436,30 @@ export default function ApplyJobPage() {
                       )}
 
                       {/* Application Form */}
-                      <DynamicApplicationForm
-                        fields={job.form_fields}
-                        onSubmit={handleSubmit}
-                        isLoading={submitting}
-                        candidateProfile={candidateProfile}
-                      />
+                      {job.form_fields && job.form_fields.length > 0 ? (
+                        <DynamicApplicationForm
+                          fields={job.form_fields}
+                          onSubmit={handleSubmit}
+                          isLoading={submitting}
+                          candidateProfile={candidateProfile}
+                        />
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground mb-4">
+                            This job doesn't require additional application forms.
+                          </p>
+                          <Button 
+                            onClick={() => {
+                              // Submit without form fields
+                              handleSubmit({});
+                            }}
+                            disabled={submitting}
+                            className="w-full"
+                          >
+                            {submitting ? 'Submitting Application...' : 'Submit Application'}
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
