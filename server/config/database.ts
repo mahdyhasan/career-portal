@@ -12,7 +12,7 @@ const dbConfig = {
   password: parsed.auth?.split(':')[1] || '',
   database: parsed.pathname?.substring(1) || 'augmex_career',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 5,
   queueLimit: 0,
 };
 

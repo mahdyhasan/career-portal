@@ -15,7 +15,6 @@ import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
-import JobsList from "./pages/jobs/JobsList";
 import JobDetails from "./pages/jobs/JobDetails";
 import ApplyJob from "./pages/candidate/ApplyJob";
 import CandidateProfile from "./pages/candidate/Profile";
@@ -28,6 +27,11 @@ import AuditLog from "./pages/admin/AuditLog";
 import SystemConfiguration from "./pages/admin/SystemConfiguration";
 import DataExport from "./pages/admin/DataExport";
 import SystemStats from "./pages/admin/SystemStats";
+import JobsManagement from "./pages/admin/JobsManagement";
+import ApplicationsManagement from "./pages/admin/ApplicationsManagement";
+import SystemManagement from "./pages/admin/SystemManagement";
+import LookupManagement from "./pages/admin/LookupManagement";
+import CreateUser from "./pages/admin/CreateUser";
 
 const queryClient = new QueryClient();
 
@@ -44,7 +48,6 @@ const App = () => (
           <Route path="/signup" element={<Signup />} />
           
           {/* Job Routes */}
-          <Route path="/jobs" element={<JobsList />} />
           <Route path="/jobs/:id" element={<JobDetails />} />
           
           {/* Candidate Routes - Protected */}
@@ -58,25 +61,40 @@ const App = () => (
               <CandidateProfile />
             </ProtectedRoute>
           } />
+          <Route path="/candidate/my-applications" element={
+            <ProtectedRoute requireRole="Candidate">
+              <CandidateProfile />
+            </ProtectedRoute>
+          } />
           
-          {/* Admin Routes - Protected */}
+          {/* Hiring Manager Routes - Protected */}
           <Route path="/admin/dashboard" element={
             <ProtectedRoute requireRole="HiringManager">
               <AdminDashboard />
             </ProtectedRoute>
           } />
           <Route path="/admin/create-job" element={
-            <ProtectedRoute requireRole="HiringManager">
+            <ProtectedRoute requireRole={["HiringManager", "SuperAdmin"]}>
               <AdminCreateJob />
             </ProtectedRoute>
           } />
           <Route path="/admin/candidates" element={
-            <ProtectedRoute requireRole="HiringManager">
+            <ProtectedRoute requireRole={["HiringManager", "SuperAdmin"]}>
               <AdminCandidateManagement />
             </ProtectedRoute>
           } />
+          <Route path="/admin/jobs" element={
+            <ProtectedRoute requireRole={["HiringManager", "SuperAdmin"]}>
+              <JobsManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/applications" element={
+            <ProtectedRoute requireRole={["HiringManager", "SuperAdmin"]}>
+              <ApplicationsManagement />
+            </ProtectedRoute>
+          } />
           
-          {/* Super Admin Routes - Protected */}
+          {/* Super Admin Only Routes - Protected */}
           <Route path="/admin/super-dashboard" element={
             <ProtectedRoute requireRole="SuperAdmin">
               <SuperAdminDashboard />
@@ -85,6 +103,11 @@ const App = () => (
           <Route path="/admin/users" element={
             <ProtectedRoute requireRole="SuperAdmin">
               <UserManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/users/create" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <CreateUser />
             </ProtectedRoute>
           } />
           <Route path="/admin/audit-log" element={
@@ -107,6 +130,16 @@ const App = () => (
               <SystemStats />
             </ProtectedRoute>
           } />
+          <Route path="/admin/system" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <SystemManagement />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/lookup" element={
+            <ProtectedRoute requireRole="SuperAdmin">
+              <LookupManagement />
+            </ProtectedRoute>
+          } />
           
           {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
@@ -116,4 +149,5 @@ const App = () => (
   </QueryClientProvider>
 );
 
+createRoot(document.getElementById("root")!).render(<App />);
 createRoot(document.getElementById("root")!).render(<App />);

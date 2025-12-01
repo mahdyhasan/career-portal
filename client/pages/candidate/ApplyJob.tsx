@@ -6,7 +6,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DynamicApplicationForm } from '@/components/forms/DynamicApplicationForm';
 import { useAuth } from '@/hooks/useAuth';
 import { jobsApi, applicationsApi, candidateApi } from '@/services/api';
-import { Job, CandidateProfile } from '@shared/api';
+import { Job, CandidateProfile, CandidateProfileUpdateRequest } from '@shared/api';
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 
 export default function ApplyJobPage() {
@@ -57,16 +57,58 @@ export default function ApplyJobPage() {
       setSubmitting(true);
       setError('');
 
-      // Get user email from localStorage
-      const userStr = localStorage.getItem('auth_user');
-      const userData = userStr ? JSON.parse(userStr) : null;
+      // Extract profile information from application data
+      const profileUpdate: Partial<CandidateProfileUpdateRequest> = {};
+      const answers: Array<{ job_form_field_id: number; answer_text?: string }> = [];
 
+      Object.entries(applicationData).forEach(([key, value]) => {
+        const fieldId = parseInt(key);
+        
+        // Check if this is a profile field (based on field name patterns)
+        const field = job.form_fields?.find(f => f.id === fieldId);
+        if (field) {
+          const fieldName = field.name.toLowerCase();
+          
+          // Map common field names to profile fields
+          if (fieldName.includes('first') && fieldName.includes('name')) {
+            profileUpdate.first_name = String(value);
+          } else if (fieldName.includes('last') && fieldName.includes('name')) {
+            profileUpdate.last_name = String(value);
+          } else if (fieldName.includes('phone')) {
+            profileUpdate.phone = String(value);
+          } else if (fieldName.includes('bio') || fieldName.includes('cover')) {
+            profileUpdate.bio = String(value);
+          } else if (fieldName.includes('linkedin')) {
+            profileUpdate.linkedin_url = String(value);
+          } else if (fieldName.includes('github')) {
+            profileUpdate.github_url = String(value);
+          } else if (fieldName.includes('portfolio')) {
+            profileUpdate.portfolio_url = String(value);
+          } else {
+            // Regular form field
+            answers.push({
+              job_form_field_id: fieldId,
+              answer_text: String(value),
+            });
+          }
+        }
+      });
+
+      // Update candidate profile if there are profile updates
+      if (Object.keys(profileUpdate).length > 0) {
+        try {
+          await candidateApi.updateProfile(profileUpdate as CandidateProfileUpdateRequest);
+        } catch (profileErr) {
+          console.warn('Failed to update profile:', profileErr);
+          // Don't fail the whole application if profile update fails
+        }
+      }
+
+      // Submit the application
       await applicationsApi.submitApplication({
         job_id: job.id,
-        answers: Object.entries(applicationData).map(([key, value]) => ({
-          job_form_field_id: parseInt(key),
-          answer_text: String(value),
-        })),
+        answers,
+        candidate_profile: Object.keys(profileUpdate).length > 0 ? profileUpdate : undefined,
       });
 
       setSubmitted(true);
@@ -83,7 +125,7 @@ export default function ApplyJobPage() {
         <div className="py-12 px-4">
           <div className="container mx-auto text-center">
             <h1 className="text-2xl font-bold text-foreground mb-4">Job not found</h1>
-            <Button onClick={() => navigate('/jobs')}>Back to Jobs</Button>
+            <Button onClick={() => navigate('/')}>Back to Jobs</Button>
           </div>
         </div>
       </Layout>
@@ -113,7 +155,7 @@ export default function ApplyJobPage() {
               <div className="bg-white border border-border rounded-xl p-8 text-center">
                 <h1 className="text-2xl font-bold text-foreground mb-4">Job Not Found</h1>
                 <p className="text-muted-foreground mb-6">{error}</p>
-                <Button onClick={() => navigate('/jobs')}>Back to Jobs</Button>
+                <Button onClick={() => navigate('/')}>Back to Jobs</Button>
               </div>
             ) : submitted ? (
               <div className="bg-white border border-border rounded-xl p-8 text-center">

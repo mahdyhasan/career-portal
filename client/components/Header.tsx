@@ -37,24 +37,26 @@ export function Header() {
   };
 
   return (
-    <header className="bg-white border-b border-border sticky top-0 z-40">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
+    <header className="bg-white border-b border-border sticky top-0 z-20">
+      <div className="container mx-auto ">
+        <div className="flex items-center justify-between gap-2">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 font-bold text-xl text-primary hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-primary rounded flex items-center justify-center text-white font-bold text-lg">
-              A
-            </div>
-            <span className="hidden sm:inline">Augmex</span>
+              <img src="/assets/logo.png" alt="Logo" className="h-32 w-32 object-contain" />
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
+            <a 
+              href="https://augmex.io/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Back to Main Site
+            </a>
             <Link to="/" className="text-foreground hover:text-primary transition-colors font-medium">
               Home
-            </Link>
-            <Link to="/jobs" className="text-foreground hover:text-primary transition-colors font-medium">
-              Jobs
             </Link>
             {isCandidate && (
               <Link to="/profile" className="text-foreground hover:text-primary transition-colors font-medium">
@@ -211,6 +213,15 @@ export function Header() {
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav className="md:hidden mt-4 pt-4 border-t border-border space-y-2 animate-slide-in-up">
+            <a 
+              href="https://augmex.io/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Back to Main Site
+            </a>
             <Link
               to="/"
               className="block px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-foreground font-medium"

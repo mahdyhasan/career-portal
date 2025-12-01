@@ -1,592 +1,421 @@
-/**
- * Real API service for communicating with the backend
- * Replaces mock data with actual database operations
- */
+// API service functions for the career portal
 
-import {
+// Import types from shared API
+import type { 
+  Company, 
+  Department, 
+  ExperienceLevel, 
+  JobType, 
+  JobStatus, 
+  ApplicationStatus,
+  ReferralSource,
+  InputType,
+  Country,
+  City,
+  Area,
   User,
+  CandidateProfile,
+  Job,
+  JobFormField,
+  Application,
   AuthResponse,
   LoginRequest,
   SignupRequest,
-  Job,
-  Application,
-  CandidateProfile,
-  PaginatedResponse,
-  JobFilters,
-  CandidateFilters,
-  ApplicationStatus,
-  JobStatus,
-  JobType,
-  ExperienceLevel,
-  Company,
-  Department,
-  Skill,
-  SkillsListResponse,
-  SubmitApplicationRequest,
-  UpdateApplicationStatusRequest,
-  ApplicationFeedbackRequest,
+  CandidateProfileUpdateRequest,
   CandidateEducationRequest,
   CandidateAchievementRequest,
   CandidateSkillRequest,
-  CreateJobRequest
+  CreateJobRequest,
+  SubmitApplicationRequest,
+  UpdateApplicationStatusRequest,
+  ApplicationFeedbackRequest,
+  FileUploadResponse,
+  JobFilters,
+  CandidateFilters,
+  PaginatedResponse,
+  DemoResponse,
+  JobsListResponse,
+  ApplicationsListResponse,
+  CandidatesListResponse,
+  SkillCreateRequest,
+  SkillsListResponse,
+  ApiError
 } from '@shared/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE_URL = '/api';
 
-class ApiError extends Error {
-  constructor(
-    public message: string,
-    public code: string,
-    public details?: any
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-// Generic request wrapper with error handling
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new ApiError(
-        data.message || 'Request failed',
-        data.code || 'REQUEST_FAILED',
-        data.details
-      );
-    }
-
-    return data;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError(
-      error instanceof Error ? error.message : 'Network error',
-      'NETWORK_ERROR'
-    );
-  }
-}
-
-// Authenticated request wrapper
-async function authenticatedRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = localStorage.getItem('auth_token');
+// Generic fetch wrapper with error handling
+async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
   
-  if (!token) {
-    throw new ApiError('Authentication required', 'AUTH_REQUIRED');
+  const config: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  };
+
+  // Add auth token if available
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers = {
+      ...config.headers,
+      'Authorization': `Bearer ${token}`,
+    };
   }
 
-  return apiRequest<T>(endpoint, {
-    ...options,
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`API Error (${endpoint}):`, error);
+    throw error;
+  }
 }
 
-// ==========================================
-// AUTHENTICATION API
-// ==========================================
-
-export const authApi = {
-  // Login
-  async login(credentials: LoginRequest): Promise<AuthResponse> {
-    return apiRequest<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-  },
-
-  // Signup
-  async signup(userData: SignupRequest): Promise<AuthResponse> {
-    return apiRequest<AuthResponse>('/auth/signup', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-  },
-
-  // Social login
-  async socialLogin(provider: string, token: string, profile?: any): Promise<AuthResponse> {
-    return apiRequest<AuthResponse>('/auth/social', {
-      method: 'POST',
-      body: JSON.stringify({ provider, token, profile }),
-    });
-  },
-
-  // Validate token
-  async validateToken(): Promise<{ valid: boolean; user: any }> {
-    return authenticatedRequest('/auth/validate');
-  },
-
-  // Refresh token
-  async refreshToken(): Promise<{ token: string; user: any }> {
-    return authenticatedRequest('/auth/refresh', {
-      method: 'POST',
-    });
-  },
-};
-
-// ==========================================
-// JOBS API
-// ==========================================
-
+// Jobs API
 export const jobsApi = {
-  // Get all jobs with filters and pagination
-  async getJobs(
-    page = 1,
-    limit = 10,
-    filters: JobFilters = {}
-  ): Promise<PaginatedResponse<Job>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      ...Object.fromEntries(
-        Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
-      ),
-    });
-
-    return apiRequest<PaginatedResponse<Job>>(`/jobs?${params}`);
-  },
-
-  // Get job by ID with form fields
-  async getJob(id: number): Promise<Job> {
-    return apiRequest<Job>(`/jobs/${id}`);
-  },
-
-  // Create new job (HiringManager/SuperAdmin only)
-  async createJob(jobData: CreateJobRequest): Promise<Job> {
-    return authenticatedRequest<Job>('/jobs', {
+  createJob: async (jobData: CreateJobRequest) => {
+    return apiFetch<Job>('/jobs', {
       method: 'POST',
       body: JSON.stringify(jobData),
     });
   },
-
-  // Update job (HiringManager/SuperAdmin only)
-  async updateJob(id: number, jobData: Partial<Job>): Promise<Job> {
-    return authenticatedRequest<Job>(`/jobs/${id}`, {
+  
+  getJobs: async (page?: number, limit?: number, filters?: JobFilters) => {
+    const params = new URLSearchParams({
+      ...(page && { page: page.toString() }),
+      ...(limit && { limit: limit.toString() }),
+      ...(filters?.search && { search: filters.search }),
+      ...(filters?.job_type_id && { job_type_id: filters.job_type_id.toString() }),
+      ...(filters?.experience_level_id && { experience_level_id: filters.experience_level_id.toString() }),
+      ...(filters?.company_id && { company_id: filters.company_id.toString() }),
+      ...(filters?.department_id && { department_id: filters.department_id.toString() }),
+      ...(filters?.location && { location: filters.location }),
+      ...(filters?.salary_range && { salary_range: filters.salary_range }),
+    }).toString();
+    return apiFetch<JobsListResponse>(`/jobs${params ? `?${params}` : ''}`);
+  },
+  
+  getJob: async (id: number) => {
+    return apiFetch<Job>(`/jobs/${id}`);
+  },
+  
+  updateJob: async (id: number, jobData: Partial<CreateJobRequest>) => {
+    return apiFetch<Job>(`/jobs/${id}`, {
       method: 'PUT',
       body: JSON.stringify(jobData),
     });
   },
-
-  // Delete job (SuperAdmin only)
-  async deleteJob(id: number): Promise<void> {
-    return authenticatedRequest<void>(`/jobs/${id}`, {
+  
+  deleteJob: async (id: number) => {
+    return apiFetch(`/jobs/${id}`, {
       method: 'DELETE',
     });
   },
+};
 
-  // Get job statistics (for dashboard)
-  async getJobStats(): Promise<{
-    total: number;
-    published: number;
-    draft: number;
-    closed: number;
-  }> {
-    return authenticatedRequest('/jobs/stats');
+// Lookup API
+export const lookupApi = {
+  getCompanies: async (): Promise<Company[]> => {
+    return apiFetch('/lookup/companies');
+  },
+  
+  getDepartments: async (): Promise<Department[]> => {
+    return apiFetch('/lookup/departments');
+  },
+  
+  getExperienceLevels: async (): Promise<ExperienceLevel[]> => {
+    return apiFetch('/lookup/experience-levels');
+  },
+  
+  getJobTypes: async (): Promise<JobType[]> => {
+    return apiFetch('/lookup/job-types');
+  },
+  
+  getJobStatuses: async (): Promise<JobStatus[]> => {
+    return apiFetch('/lookup/job-statuses');
+  },
+  
+  getApplicationStatuses: async () => {
+    return apiFetch('/lookup/application-statuses');
+  },
+  
+  getReferralSources: async () => {
+    return apiFetch('/lookup/referral-sources');
+  },
+  
+  getInputTypes: async () => {
+    return apiFetch('/lookup/input-types');
+  },
+  
+  getCountries: async () => {
+    return apiFetch('/lookup/countries');
+  },
+  
+  getCities: async (countryId?: number) => {
+    const params = countryId ? `?country_id=${countryId}` : '';
+    return apiFetch(`/lookup/cities${params}`);
+  },
+  
+  getAreas: async (cityId?: number) => {
+    const params = cityId ? `?city_id=${cityId}` : '';
+    return apiFetch(`/lookup/areas${params}`);
+  },
+
+  getSkills: async (search?: string, approved?: boolean): Promise<any[]> => {
+    const params = new URLSearchParams({
+      ...(search && { search }),
+      ...(approved !== undefined && { approved: approved.toString() }),
+    }).toString();
+    return apiFetch(`/lookup/skills${params ? `?${params}` : ''}`);
+  },
+
+  createSkill: async (skillData: SkillCreateRequest): Promise<any> => {
+    return apiFetch('/lookup/skills', {
+      method: 'POST',
+      body: JSON.stringify(skillData),
+    });
   },
 };
 
-// ==========================================
-// APPLICATIONS API
-// ==========================================
-
+// Applications API
 export const applicationsApi = {
-  // Get applications (for candidates and admins)
-  async getApplications(
-    page = 1,
-    limit = 10,
-    filters: CandidateFilters = {}
-  ): Promise<PaginatedResponse<Application>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      ...Object.fromEntries(
-        Object.entries(filters).filter(([_, value]) => value !== undefined && value !== '')
-      ),
-    });
-
-    return authenticatedRequest<PaginatedResponse<Application>>(`/applications?${params}`);
-  },
-
-  // Get application by ID
-  async getApplication(id: number): Promise<Application> {
-    return authenticatedRequest<Application>(`/applications/${id}`);
-  },
-
-  // Submit application
-  async submitApplication(
-    applicationData: SubmitApplicationRequest
-  ): Promise<Application> {
-    return authenticatedRequest<Application>('/applications', {
+  submitApplication: async (applicationData: SubmitApplicationRequest) => {
+    return apiFetch<Application>('/applications', {
       method: 'POST',
       body: JSON.stringify(applicationData),
     });
   },
-
-  // Update application status (HiringManager/SuperAdmin only)
-  async updateApplicationStatus(
-    id: number,
-    statusData: UpdateApplicationStatusRequest
-  ): Promise<Application> {
-    return authenticatedRequest<Application>(`/applications/${id}/status`, {
+  
+  getApplications: async (filters?: CandidateFilters) => {
+    if (filters) {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.status_id) params.append('status_id', filters.status_id.toString());
+      if (filters.job_id) params.append('job_id', filters.job_id.toString());
+      if (filters.skills) params.append('skills', filters.skills.join(','));
+      if (filters.location?.country_id) params.append('country_id', filters.location.country_id.toString());
+      if (filters.location?.city_id) params.append('city_id', filters.location.city_id.toString());
+      if (filters.location?.area_id) params.append('area_id', filters.location.area_id.toString());
+      if (filters.created_after) params.append('created_after', filters.created_after);
+      if (filters.created_before) params.append('created_before', filters.created_before);
+      
+      return apiFetch<ApplicationsListResponse>(`/applications?${params.toString()}`);
+    }
+    return apiFetch<ApplicationsListResponse>('/applications');
+  },
+  
+  getApplicationById: async (id: number): Promise<Application> => {
+    return apiFetch(`/applications/${id}`);
+  },
+  
+  updateApplicationStatus: async (id: number, statusData: UpdateApplicationStatusRequest) => {
+    return apiFetch(`/applications/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify(statusData),
     });
   },
-
-  // Submit UX feedback (after application submission)
-  async submitFeedback(
-    id: number,
-    feedbackData: ApplicationFeedbackRequest
-  ): Promise<void> {
-    return authenticatedRequest<void>(`/applications/${id}/feedback`, {
+  
+  submitApplicationFeedback: async (id: number, feedbackData: ApplicationFeedbackRequest) => {
+    return apiFetch(`/applications/${id}/feedback`, {
       method: 'POST',
       body: JSON.stringify(feedbackData),
     });
   },
+};
 
-  // Get application statistics
-  async getApplicationStats(): Promise<{
-    total: number;
-    applied: number;
-    underReview: number;
-    interview: number;
-    offer: number;
-    rejected: number;
-  }> {
-    return authenticatedRequest('/applications/stats');
+// Auth API
+export const authApi = {
+  login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
+    return apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
+  
+  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
+    return apiFetch('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+  
+  logout: async () => {
+    return apiFetch('/auth/logout', {
+      method: 'POST',
+    });
+  },
+  
+  refreshToken: async (): Promise<AuthResponse> => {
+    return apiFetch('/auth/refresh', {
+      method: 'POST',
+    });
+  },
+  
+  getCurrentUser: async (): Promise<User> => {
+    return apiFetch('/auth/me');
+  },
+
+  validateToken: async (): Promise<{ valid: boolean }> => {
+    return apiFetch('/auth/validate');
+  },
+
+  sendOTP: async (email: string): Promise<{ message: string }> => {
+    return apiFetch('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  verifyOTP: async (email: string, otp: string): Promise<{ valid: boolean }> => {
+    return apiFetch('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  },
+
+  signupWithOTP: async (userData: { email: string; password: string; firstName?: string; lastName?: string; otp: string }): Promise<AuthResponse> => {
+    return apiFetch('/auth/signup-with-otp', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
   },
 };
 
-// ==========================================
-// CANDIDATE PROFILE API
-// ==========================================
-
+// Candidate Profile API
 export const candidateApi = {
-  // Get my profile
-  async getMyProfile(): Promise<CandidateProfile> {
-    return authenticatedRequest<CandidateProfile>('/candidate/profile');
+  getProfile: async () => {
+    return apiFetch('/candidate/profile');
   },
 
-  // Update my profile
-  async updateProfile(
-    profileData: Partial<CandidateProfile>
-  ): Promise<CandidateProfile> {
-    return authenticatedRequest<CandidateProfile>('/candidate/profile', {
+  getMyProfile: async (): Promise<CandidateProfile> => {
+    return apiFetch('/candidate/profile');
+  },
+  
+  updateProfile: async (profileData: CandidateProfileUpdateRequest) => {
+    return apiFetch<CandidateProfile>('/candidate/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
     });
   },
-
-  // Add education
-  async addEducation(
-    educationData: CandidateEducationRequest
-  ): Promise<any> {
-    return authenticatedRequest('/candidate/education', {
+  
+  addEducation: async (educationData: CandidateEducationRequest) => {
+    return apiFetch('/candidate/education', {
       method: 'POST',
       body: JSON.stringify(educationData),
     });
   },
-
-  // Update education
-  async updateEducation(
-    id: number,
-    educationData: Partial<CandidateEducationRequest>
-  ): Promise<any> {
-    return authenticatedRequest(`/candidate/education/${id}`, {
+  
+  updateEducation: async (id: number, educationData: CandidateEducationRequest) => {
+    return apiFetch(`/candidate/education/${id}`, {
       method: 'PUT',
       body: JSON.stringify(educationData),
     });
   },
-
-  // Delete education
-  async deleteEducation(id: number): Promise<void> {
-    return authenticatedRequest(`/candidate/education/${id}`, {
+  
+  deleteEducation: async (id: number) => {
+    return apiFetch(`/candidate/education/${id}`, {
       method: 'DELETE',
     });
   },
-
-  // Add achievement
-  async addAchievement(
-    achievementData: CandidateAchievementRequest
-  ): Promise<any> {
-    return authenticatedRequest('/candidate/achievements', {
+  
+  addAchievement: async (achievementData: CandidateAchievementRequest) => {
+    return apiFetch('/candidate/achievements', {
       method: 'POST',
       body: JSON.stringify(achievementData),
     });
   },
-
-  // Update achievement
-  async updateAchievement(
-    id: number,
-    achievementData: Partial<CandidateAchievementRequest>
-  ): Promise<any> {
-    return authenticatedRequest(`/candidate/achievements/${id}`, {
+  
+  updateAchievement: async (id: number, achievementData: CandidateAchievementRequest) => {
+    return apiFetch(`/candidate/achievements/${id}`, {
       method: 'PUT',
       body: JSON.stringify(achievementData),
     });
   },
-
-  // Delete achievement
-  async deleteAchievement(id: number): Promise<void> {
-    return authenticatedRequest(`/candidate/achievements/${id}`, {
+  
+  deleteAchievement: async (id: number) => {
+    return apiFetch(`/candidate/achievements/${id}`, {
       method: 'DELETE',
     });
   },
-
-  // Add skill
-  async addSkill(skillData: CandidateSkillRequest): Promise<any> {
-    return authenticatedRequest('/candidate/skills', {
+  
+  addSkill: async (skillData: CandidateSkillRequest) => {
+    return apiFetch('/candidate/skills', {
       method: 'POST',
       body: JSON.stringify(skillData),
     });
   },
-
-  // Remove skill
-  async removeSkill(skillId: number): Promise<void> {
-    return authenticatedRequest(`/candidate/skills/${skillId}`, {
+  
+  removeSkill: async (skillId: number) => {
+    return apiFetch(`/candidate/skills/${skillId}`, {
       method: 'DELETE',
     });
   },
 
-  // Upload file (CV, Portfolio, etc.)
-  async uploadFile(
-    file: File,
-    fileType: 'CV' | 'Portfolio' | 'Photo' | 'Other'
-  ): Promise<{ file_url: string; file_size_kb: number; mime_type: string }> {
+  withdrawApplication: async (applicationId: number) => {
+    return apiFetch(`/applications/${applicationId}/withdraw`, {
+      method: 'DELETE',
+    });
+  },
+  
+  uploadFile: async (file: File): Promise<FileUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('file_type', fileType);
-
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new ApiError('Authentication required', 'AUTH_REQUIRED');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/candidate/upload`, {
+    
+    return apiFetch('/candidate/upload', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
       body: formData,
+      headers: {}, // Let browser set Content-Type for FormData
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new ApiError(
-        data.message || 'Upload failed',
-        data.code || 'UPLOAD_FAILED'
-      );
-    }
-
-    return data;
   },
 };
 
-// ==========================================
-// ADMIN API
-// ==========================================
-
+// Admin API
 export const adminApi = {
-  // Get all users (SuperAdmin only)
-  async getUsers(
-    page = 1,
-    limit = 10,
-    search?: string,
-    role_id?: number,
-    is_active?: boolean
-  ): Promise<PaginatedResponse<User>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      ...(search && { search }),
-      ...(role_id && { role_id: role_id.toString() }),
-      ...(is_active !== undefined && { is_active: is_active.toString() }),
-    });
-
-    return authenticatedRequest<PaginatedResponse<User>>(`/admin/users?${params}`);
+  getUsers: async (filters?: any) => {
+    const params = new URLSearchParams(filters).toString();
+    return apiFetch(`/admin/users${params ? `?${params}` : ''}`);
   },
-
-  // Update user status (activate/deactivate)
-  async updateUserStatus(userId: number, is_active: boolean): Promise<void> {
-    return authenticatedRequest(`/admin/users/${userId}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_active }),
-    });
-  },
-
-  // Update user role
-  async updateUserRole(userId: number, role_id: number): Promise<void> {
-    return authenticatedRequest(`/admin/users/${userId}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({ role_id }),
-    });
-  },
-
-  // Get system statistics
-  async getSystemStats(): Promise<{
-    users: Array<{ role: string; count: number; active_count: number }>;
-    jobs: Array<{ status: string; count: number }>;
-    applications: Array<{ status: string; count: number }>;
-    recentActivity: { new_users: number; new_jobs: number; new_applications: number };
-  }> {
-    return authenticatedRequest('/admin/stats');
-  },
-
-  // Get system configuration
-  async getSystemConfig(): Promise<{
-    database: { version: string; connection: string };
-    server: { time: string; uptime: number };
-    features: { [key: string]: boolean };
-  }> {
-    return authenticatedRequest('/admin/config');
-  },
-
-  // Get audit log
-  async getAuditLog(
-    page = 1,
-    limit = 50,
-    filters?: {
-      action?: string;
-      user_id?: number;
-      start_date?: string;
-      end_date?: string;
-    }
-  ): Promise<PaginatedResponse<any>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      ...Object.fromEntries(
-        Object.entries(filters || {}).filter(([_, value]) => value !== undefined && value !== '')
-      ),
-    });
-
-    return authenticatedRequest(`/admin/audit-log?${params}`);
-  },
-
-  // Export data
-  async exportData(type: 'users' | 'jobs' | 'applications'): Promise<{ data: any[] }> {
-    const params = new URLSearchParams({ type });
-    return authenticatedRequest(`/admin/export?${params}`);
-  },
-};
-
-// ==========================================
-// LOOKUP DATA API
-// ==========================================
-
-export const lookupApi = {
-  // Get job statuses
-  async getJobStatuses(): Promise<JobStatus[]> {
-    return apiRequest<JobStatus[]>('/lookup/job-statuses');
-  },
-
-  // Get job types
-  async getJobTypes(): Promise<JobType[]> {
-    return apiRequest<JobType[]>('/lookup/job-types');
-  },
-
-  // Get experience levels
-  async getExperienceLevels(): Promise<ExperienceLevel[]> {
-    return apiRequest<ExperienceLevel[]>('/lookup/experience-levels');
-  },
-
-  // Get companies
-  async getCompanies(): Promise<Company[]> {
-    return apiRequest<Company[]>('/lookup/companies');
-  },
-
-  // Get departments
-  async getDepartments(): Promise<Department[]> {
-    return apiRequest<Department[]>('/lookup/departments');
-  },
-
-  // Get application statuses
-  async getApplicationStatuses(): Promise<ApplicationStatus[]> {
-    return apiRequest<ApplicationStatus[]>('/lookup/application-statuses');
-  },
-
-  // Get skills
-  async getSkills(
-    search?: string,
-    approvedOnly = true
-  ): Promise<SkillsListResponse> {
-    const params = new URLSearchParams({
-      ...(search && { search }),
-      ...(approvedOnly && { approved: 'true' }),
-    });
-
-    return apiRequest<SkillsListResponse>(`/lookup/skills?${params}`);
-  },
-
-  // Create new skill (pending approval)
-  async createSkill(skillData: { name: string }): Promise<Skill> {
-    return authenticatedRequest<Skill>('/lookup/skills', {
+  
+  createUser: async (userData: any) => {
+    return apiFetch('/admin/users', {
       method: 'POST',
-      body: JSON.stringify(skillData),
+      body: JSON.stringify(userData),
     });
   },
+  
+  updateUser: async (id: number, userData: any) => {
+    return apiFetch(`/admin/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  },
+  
+  deleteUser: async (id: number) => {
+    return apiFetch(`/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  
+  getSystemStats: async () => {
+    return apiFetch('/admin/stats');
+  },
+  
+  getAuditLog: async (filters?: any) => {
+    const params = new URLSearchParams(filters).toString();
+    return apiFetch(`/admin/audit-log${params ? `?${params}` : ''}`);
+  },
+  
+  exportData: async (type: string, filters?: any) => {
+    const params = new URLSearchParams({ type, ...filters }).toString();
+    return apiFetch(`/admin/export${params ? `?${params}` : ''}`);
+  },
 };
-
-// ==========================================
-// UTILITY FUNCTIONS
-// ==========================================
-
-// Check if user is authenticated
-export function isAuthenticated(): boolean {
-  const token = localStorage.getItem('auth_token');
-  return !!token;
-}
-
-// Get current user from token
-export function getCurrentUser(): User | null {
-  try {
-    const userStr = localStorage.getItem('current_user');
-    return userStr ? JSON.parse(userStr) : null;
-  } catch {
-    return null;
-  }
-}
-
-// Set authentication data
-export function setAuthData(authResponse: AuthResponse): void {
-  localStorage.setItem('auth_token', authResponse.token);
-  localStorage.setItem('current_user', JSON.stringify(authResponse.user));
-}
-
-// Clear authentication data
-export function clearAuthData(): void {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('current_user');
-}
-
-// Handle API errors globally
-export function handleApiError(error: any): string {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error?.message) {
-    return error.message;
-  }
-  return 'An unexpected error occurred';
-}
-
-export { ApiError };

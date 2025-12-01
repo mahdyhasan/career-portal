@@ -6,24 +6,33 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { jobsApi } from '@/services/api';
 import { Job } from '@shared/api';
-import { MapPin, DollarSign, Briefcase, ArrowLeft, Loader2 } from 'lucide-react';
+import { MapPin, DollarSign, Briefcase, ArrowLeft, Loader2, Users, Settings, Eye } from 'lucide-react';
 
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, isCandidate } = useAuth();
+  const { isAuthenticated, isCandidate, isAdmin, isSuperAdmin } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadJob = async () => {
-      if (!id) return;
+      if (!id) {
+        setError('Invalid job ID');
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
+        setError(null);
         const data = await jobsApi.getJob(parseInt(id));
         setJob(data);
       } catch (error) {
         console.error('Failed to load job:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load job details');
+        setJob(null);
       } finally {
         setLoading(false);
       }
@@ -45,13 +54,18 @@ export default function JobDetails() {
     );
   }
 
-  if (!job) {
+  if (error || !job) {
     return (
       <Layout>
         <div className="py-12 px-4">
           <div className="container mx-auto text-center">
-            <h1 className="text-2xl font-bold text-foreground mb-4">Job Not Found</h1>
-            <Button onClick={() => navigate('/jobs')}>
+            <h1 className="text-2xl font-bold text-foreground mb-4">
+              {error || 'Job Not Found'}
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              {error ? 'Please try again later or contact support if the problem persists.' : 'The job you\'re looking for doesn\'t exist or has been removed.'}
+            </p>
+            <Button onClick={() => navigate('/')}>
               <ArrowLeft size={16} className="mr-2" />
               Back to Jobs
             </Button>
@@ -66,11 +80,24 @@ export default function JobDetails() {
       navigate('/login');
       return;
     }
-    if (!isCandidate) {
-      alert('Only candidates can apply for jobs');
-      return;
+    if (isCandidate) {
+      navigate(`/apply/${job.id}`);
+    } else {
+      // Non-candidate users get redirected to login with a message
+      navigate('/login');
     }
-    navigate(`/apply/${job.id}`);
+  };
+
+  const handleViewApplications = () => {
+    navigate(`/admin/applications?job_id=${job.id}`);
+  };
+
+  const handleEditJob = () => {
+    navigate(`/admin/jobs/${job.id}/edit`);
+  };
+
+  const handleManageJob = () => {
+    navigate(`/admin/jobs`);
   };
 
   return (
@@ -79,7 +106,7 @@ export default function JobDetails() {
         <div className="container mx-auto max-w-4xl">
           {/* Back Button */}
           <button
-            onClick={() => navigate('/jobs')}
+            onClick={() => navigate('/')}
             className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all mb-8"
           >
             <ArrowLeft size={20} />
@@ -133,15 +160,70 @@ export default function JobDetails() {
               )}
             </div>
 
-            {/* Apply Button */}
-            <Button
-              onClick={handleApplyClick}
-              size="lg"
-              className="w-full md:w-auto px-12"
-            >
-              Apply Now
-              <ArrowLeft size={20} className="ml-2 rotate-180" />
-            </Button>
+            {/* Action Buttons - Different for different user types */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              {!isAuthenticated && (
+                <Button
+                  onClick={handleApplyClick}
+                  size="lg"
+                  className="flex-1"
+                >
+                  Apply Now
+                  <ArrowLeft size={20} className="ml-2 rotate-180" />
+                </Button>
+              )}
+
+              {isAuthenticated && isCandidate && (
+                <Button
+                  onClick={handleApplyClick}
+                  size="lg"
+                  className="flex-1"
+                >
+                  Apply Now
+                  <ArrowLeft size={20} className="ml-2 rotate-180" />
+                </Button>
+              )}
+
+              {isAuthenticated && (isAdmin || isSuperAdmin) && (
+                <>
+                  <Button
+                    onClick={handleViewApplications}
+                    variant="outline"
+                    size="lg"
+                    className="flex-1"
+                  >
+                    <Users size={20} className="mr-2" />
+                    View Applications
+                  </Button>
+                  <Button
+                    onClick={handleEditJob}
+                    variant="outline"
+                    size="lg"
+                    className="flex-1"
+                  >
+                    <Settings size={20} className="mr-2" />
+                    Edit Job
+                  </Button>
+                  <Button
+                    onClick={handleManageJob}
+                    variant="outline"
+                    size="lg"
+                    className="flex-1"
+                  >
+                    <Eye size={20} className="mr-2" />
+                    Manage Jobs
+                  </Button>
+                </>
+              )}
+
+              {isAuthenticated && !isCandidate && !isAdmin && !isSuperAdmin && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex-1">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> Only candidates can apply for jobs. If you're a hiring manager or admin, please use the admin panel to manage this job.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -221,12 +303,32 @@ export default function JobDetails() {
                         </li>
                       ))}
                   </ul>
-                  <Button
-                    onClick={handleApplyClick}
-                    className="w-full mt-6"
-                  >
-                    Apply Now
-                  </Button>
+                  {isCandidate && (
+                    <Button
+                      onClick={handleApplyClick}
+                      className="w-full mt-6"
+                    >
+                      Apply Now
+                    </Button>
+                  )}
+                  {!isAuthenticated && (
+                    <Button
+                      onClick={handleApplyClick}
+                      className="w-full mt-6"
+                    >
+                      Apply Now
+                    </Button>
+                  )}
+                  {isAuthenticated && (isAdmin || isSuperAdmin) && (
+                    <Button
+                      onClick={handleViewApplications}
+                      variant="outline"
+                      className="w-full mt-6"
+                    >
+                      <Users size={16} className="mr-2" />
+                      View Applications
+                    </Button>
+                  )}
                 </div>
               )}
 

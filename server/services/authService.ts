@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { executeQuery, executeSingleQuery, findOne } from '../config/database';
 import { User, AuthResponse, LoginRequest, SignupRequest } from '@shared/api';
 
@@ -42,7 +43,7 @@ export class AuthService {
   // Find user by email
   static async findUserByEmail(email: string): Promise<User | null> {
     const query = `
-      SELECT u.*, r.name as role_name
+      SELECT u.*, r.name as role_name, r.id as role_id
       FROM users u
       JOIN roles r ON u.role_id = r.id
       WHERE u.email = ? AND u.deleted_at IS NULL
@@ -73,7 +74,7 @@ export class AuthService {
   // Find user by ID
   static async findUserById(id: number): Promise<User | null> {
     const query = `
-      SELECT u.*, r.name as role_name
+      SELECT u.*, r.name as role_name, r.id as role_id
       FROM users u
       JOIN roles r ON u.role_id = r.id
       WHERE u.id = ? AND u.deleted_at IS NULL
@@ -103,6 +104,8 @@ export class AuthService {
 
   // Register new user
   static async registerUser(userData: SignupRequest): Promise<AuthResponse> {
+    console.log('AuthService.registerUser called with:', userData);
+    
     // Check if user already exists
     const existingUser = await this.findUserByEmail(userData.email);
     if (existingUser) {
@@ -112,18 +115,21 @@ export class AuthService {
     // Get role ID
     const roleQuery = 'SELECT id FROM roles WHERE name = ?';
     const role = await findOne<any>(roleQuery, [userData.role]);
+    console.log('Found role:', role);
+    
     if (!role) {
       throw new Error('Invalid role');
     }
 
     // Hash password
     const passwordHash = await this.hashPassword(userData.password);
+    console.log('Password hashed successfully');
 
     // Create user
-    const insertQuery = `
-      INSERT INTO users (email, password_hash, role_id, is_active)
-      VALUES (?, ?, ?, 1)
-    `;
+      const insertQuery = `
+        INSERT INTO users (email, password_hash, role_id, is_active)
+        VALUES (?, ?, ?, 1)
+      `;
     const result = await executeSingleQuery(insertQuery, [
       userData.email,
       passwordHash,
@@ -131,24 +137,30 @@ export class AuthService {
     ]);
 
     const userId = result.insertId;
+    console.log('User created with ID:', userId);
 
     // If candidate, create candidate profile
-    if (userData.role === 'Candidate' && (userData.firstName || userData.lastName)) {
+    if (userData.role === 'Candidate') {
+      console.log('Creating candidate profile for user:', userId, 'with names:', userData.firstName, userData.lastName);
       const profileQuery = `
         INSERT INTO candidate_profiles (user_id, first_name, last_name)
         VALUES (?, ?, ?)
       `;
-      await executeQuery(profileQuery, [userId, userData.firstName, userData.lastName]);
+      await executeQuery(profileQuery, [userId, userData.firstName || null, userData.lastName || null]);
+      console.log('Candidate profile created successfully');
     }
 
     // Get created user
     const user = await this.findUserById(userId);
+    console.log('Retrieved created user:', user);
+    
     if (!user) {
       throw new Error('Failed to create user');
     }
 
     // Generate token
     const token = this.generateToken(user);
+    console.log('Token generated successfully');
 
     return { user, token };
   }
@@ -237,5 +249,95 @@ export class AuthService {
     const { password_hash, ...userWithoutPassword } = user;
     
     return { user: userWithoutPassword, token };
+  }
+
+  // Generate 6-digit OTP
+  static generateOTP(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  // Store OTP in database (for demo purposes, using a simple approach)
+  static async storeOTP(email: string, otp: string): Promise<void> {
+    const query = `
+      INSERT INTO otp_codes (email, otp, expires_at)
+      VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))
+      ON DUPLICATE KEY UPDATE otp = VALUES(otp), expires_at = VALUES(expires_at)
+    `;
+    await executeQuery(query, [email, otp]);
+  }
+
+  // Verify OTP
+  static async verifyOTP(email: string, otp: string): Promise<{ valid: boolean }> {
+    const query = `
+      SELECT id FROM otp_codes 
+      WHERE email = ? AND otp = ? AND expires_at > NOW()
+    `;
+    const result = await findOne<any>(query, [email, otp]);
+    
+    if (!result) {
+      throw new Error('Invalid or expired OTP');
+    }
+
+    // Delete the used OTP
+    await executeQuery('DELETE FROM otp_codes WHERE email = ?', [email]);
+    
+    return { valid: true };
+  }
+
+  // Send OTP via email
+  static async sendOTP(email: string): Promise<{ message: string }> {
+    const otp = this.generateOTP();
+    
+    // Store OTP in database
+    await this.storeOTP(email, otp);
+
+    // Send email (for development, we'll just log it)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`OTP for ${email}: ${otp}`);
+      return { message: 'OTP sent successfully (check console for development)' };
+    }
+
+    // Configure email transporter
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || 'noreply@augmex.io',
+      to: email,
+      subject: 'Augmex - Verify Your Email',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 8px;">
+            <h2 style="color: #333; margin-bottom: 20px;">Email Verification</h2>
+            <p style="color: #666; font-size: 16px; line-height: 1.5;">
+              Thank you for signing up with Augmex! Please use the following verification code to complete your registration:
+            </p>
+            <div style="background: #fff; padding: 20px; border-radius: 6px; text-align: center; margin: 20px 0;">
+              <span style="font-size: 24px; font-weight: bold; color: #007bff; letter-spacing: 2px;">
+                ${otp}
+              </span>
+            </div>
+            <p style="color: #666; font-size: 14px;">
+              This code will expire in 10 minutes. If you didn't request this code, please ignore this email.
+            </p>
+          </div>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      return { message: 'OTP sent successfully to your email' };
+    } catch (error) {
+      console.error('Email send error:', error);
+      throw new Error('Failed to send OTP email');
+    }
   }
 }

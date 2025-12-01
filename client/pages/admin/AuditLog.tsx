@@ -49,7 +49,7 @@ export default function AuditLog() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalLogs, setTotalLogs] = useState(0);
   const [search, setSearch] = useState('');
-  const [selectedAction, setSelectedAction] = useState('');
+  const [selectedAction, setSelectedAction] = useState('all');
   const [selectedUser, setSelectedUser] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -97,7 +97,7 @@ export default function AuditLog() {
 
   const handleResetFilters = () => {
     setSearch('');
-    setSelectedAction('');
+    setSelectedAction('all');
     setSelectedUser('');
     setStartDate('');
     setEndDate('');
@@ -207,7 +207,7 @@ export default function AuditLog() {
                           <SelectValue placeholder="All actions" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All actions</SelectItem>
+                          <SelectItem value="all">All actions</SelectItem>
                           <SelectItem value="create">Create</SelectItem>
                           <SelectItem value="update">Update</SelectItem>
                           <SelectItem value="delete">Delete</SelectItem>

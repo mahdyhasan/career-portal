@@ -1,270 +1,311 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Briefcase, Users, TrendingUp, MapPin, DollarSign } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ArrowRight, MapPin, DollarSign, Briefcase, Clock, Search, Filter, ChevronDown, X } from 'lucide-react';
 import { jobsApi } from '@/services/api';
-import { Job } from '@shared/api';
+import { Job, JobsListResponse } from '@shared/api';
 
 export default function Home() {
-  const navigate = useNavigate();
-  const [featuredJobs, setFeaturedJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedJobType, setSelectedJobType] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+  const [showFilters, setShowFilters] = useState(false);
+  const [jobTypes, setJobTypes] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
 
   useEffect(() => {
-    // Get first 3 jobs as featured
-    const loadFeaturedJobs = async () => {
+    // Get all jobs for the main page
+    const loadJobs = async () => {
       try {
-        const response = await jobsApi.getJobs();
-        setFeaturedJobs(response.data.slice(0, 3));
+        const response = await jobsApi.getJobs() as JobsListResponse;
+        const jobsData = response.data;
+        setJobs(jobsData);
+        setFilteredJobs(jobsData);
+        
+        // Extract unique job types and locations for filters
+        const types = [...new Set(jobsData.map(job => job.job_type?.name).filter(Boolean))] as string[];
+        const locs = [...new Set(jobsData.map(job => job.location_text).filter(Boolean))] as string[];
+        setJobTypes(types);
+        setLocations(locs);
       } catch (error) {
-        console.error('Failed to load featured jobs:', error);
+        console.error('Failed to load jobs:', error);
+      } finally {
+        setLoading(false);
       }
     };
     
-    loadFeaturedJobs();
+    loadJobs();
   }, []);
 
-  const stats = [
-    { icon: Briefcase, label: 'Jobs Posted', value: '1000+' },
-    { icon: Users, label: 'Active Candidates', value: '5000+' },
-    { icon: TrendingUp, label: 'Companies Hiring', value: '500+' },
-  ];
+  useEffect(() => {
+    // Filter jobs based on search and filters
+    let result = [...jobs];
+    
+    // Filter by search term
+    if (searchTerm) {
+      result = result.filter(job => 
+        job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.company?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Filter by job type
+    if (selectedJobType !== 'all') {
+      result = result.filter(job => job.job_type?.name === selectedJobType);
+    }
+    
+    // Filter by location
+    if (selectedLocation !== 'all') {
+      result = result.filter(job => job.location_text === selectedLocation);
+    }
+    
+    // Sort jobs
+    switch (sortBy) {
+      case 'newest':
+        result.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        break;
+      case 'oldest':
+        result.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+        break;
+      case 'title':
+        result.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      default:
+        break;
+    }
+    
+    setFilteredJobs(result);
+  }, [jobs, searchTerm, selectedJobType, selectedLocation, sortBy]);
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedJobType('all');
+    setSelectedLocation('all');
+    setSortBy('newest');
+  };
 
   return (
     <Layout>
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-blue-50 via-white to-blue-50 py-16 md:py-24 px-4 overflow-hidden relative">
-        {/* Background decoration */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
-        </div>
-
-        <div className="container mx-auto max-w-4xl relative z-10">
-          <div className="text-center">
-            {/* Badge */}
-            <div className="mb-6 flex justify-center">
-              <Badge variant="secondary" className="px-4 py-2 text-sm font-semibold">
-                ✨ Your career starts here
-              </Badge>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6 animate-fade-in leading-tight">
-              Find Your Next{' '}
-              <span className="text-primary">Career Opportunity</span>
+      {/* Enhanced Header Section */}
+      <section className="bg-gradient-to-br from-blue-50 via-white to-blue-50 py-16 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-10">
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+              Join Our Team
             </h1>
-
-            {/* Subheading */}
-            <p className="text-lg md:text-xl text-muted-foreground mb-8 animate-fade-in max-w-2xl mx-auto">
-              Discover amazing job opportunities at top companies. Browse open positions, apply with just a few clicks, and track your applications in real-time.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-slide-in-up">
-              <Button
-                size="lg"
-                onClick={() => navigate('/jobs')}
-                className="px-8 py-6 text-base font-semibold"
-              >
-                Browse Jobs
-                <ArrowRight size={20} className="ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => navigate('/signup')}
-                className="px-8 py-6 text-base font-semibold"
-              >
-                Sign Up as Candidate
-              </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 pt-8 border-t border-border">
-              {stats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div key={stat.label} className="text-center">
-                    <div className="flex justify-center mb-3">
-                      <div className="p-3 bg-primary/10 rounded-lg">
-                        <Icon size={24} className="text-primary" />
-                      </div>
-                    </div>
-                    <div className="text-3xl font-bold text-foreground mb-2">
-                      {stat.value}
-                    </div>
-                    <div className="text-muted-foreground text-sm">
-                      {stat.label}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Jobs Section */}
-      <section className="py-16 md:py-24 px-4">
-        <div className="container mx-auto">
-          {/* Section Header */}
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Featured Opportunities
-            </h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Check out some of our most exciting job openings right now
-            </p>
-          </div>
-
-          {/* Jobs Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {featuredJobs.map((job) => (
-              <Link
-                key={job.id}
-                to={`/jobs/${job.id}`}
-                className="group bg-white border border-border rounded-xl p-6 hover:shadow-lg hover:border-primary transition-all duration-300 animate-fade-in"
-              >
-                {/* Job Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
-                      {job.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {job.company?.name}
-                    </p>
-                  </div>
-                  <Badge variant="secondary">{job.job_type?.name}</Badge>
-                </div>
-
-                {/* Job Meta */}
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin size={16} />
-                    {job.location_text}
-                  </div>
-                  {job.salary_range && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <DollarSign size={16} />
-                      {job.salary_range}
-                    </div>
-                  )}
-                </div>
-
-                {/* Description Preview */}
-                <p className="text-sm text-muted-foreground mb-6 line-clamp-2">
-                  {job.description}
-                </p>
-
-                {/* CTA */}
-                <div className="flex items-center text-primary text-sm font-semibold group-hover:gap-2 transition-all">
-                  View Details
-                  <ArrowRight size={16} className="ml-1" />
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* View All Jobs CTA */}
-          <div className="text-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate('/jobs')}
-              className="px-8"
-            >
-              View All Jobs
-              <ArrowRight size={20} className="ml-2" />
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works Section */}
-      <section className="py-16 md:py-24 px-4 bg-secondary/30">
-        <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              How It Works
-            </h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Get hired in three simple steps
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              {
-                step: '01',
-                title: 'Create Account',
-                description: 'Sign up as a candidate and complete your profile with your skills and experience.',
-              },
-              {
-                step: '02',
-                title: 'Browse & Apply',
-                description: 'Explore thousands of job openings and apply with your tailored application form.',
-              },
-              {
-                step: '03',
-                title: 'Track & Succeed',
-                description: 'Monitor your applications in real-time and get notified about updates from employers.',
-              },
-            ].map((item) => (
-              <div
-                key={item.step}
-                className="relative text-center"
-              >
-                <div className="inline-block mb-4">
-                  <div className="w-16 h-16 bg-primary text-white rounded-full flex items-center justify-center text-2xl font-bold">
-                    {item.step}
-                  </div>
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-3">
-                  {item.title}
-                </h3>
-                <p className="text-muted-foreground">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-16 md:py-24 px-4">
-        <div className="container mx-auto max-w-3xl">
-          <div className="bg-gradient-to-r from-primary to-blue-600 rounded-xl p-8 md:p-12 text-white text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Ready to Start Your Career Journey?
-            </h2>
-            <p className="text-blue-100 text-lg mb-8 max-w-xl mx-auto">
-              Join thousands of job seekers who have found their dream jobs through Augmex.
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+              Discover exciting career opportunities at Augmex. We're looking for talented individuals who are passionate about making a difference.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                size="lg"
-                variant="secondary"
-                onClick={() => navigate('/signup')}
-                className="px-8"
-              >
-                Get Started
+              <Button size="lg" className="gap-2">
+                Explore Positions
+                <ArrowRight size={18} />
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => navigate('/jobs')}
-                className="px-8 border-white text-white hover:bg-white/10"
+              <Button variant="outline" size="lg">
+                Learn About Our Culture
+              </Button>
+            </div>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="max-w-3xl mx-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
+              <Input
+                type="text"
+                placeholder="Search by job title, keywords, or company..."
+                className="pl-10 pr-4 py-3 text-base"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Filters Section */}
+      <section className="bg-white border-b py-4 px-4 sticky top-0 z-10 shadow-sm">
+        <div className="container mx-auto">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowFilters(!showFilters)}
+                className="md:hidden"
               >
-                Browse Jobs
+                <Filter size={16} className="mr-1" />
+                Filters
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {filteredJobs.length} {filteredJobs.length === 1 ? 'position' : 'positions'} found
+              </span>
+            </div>
+            
+            <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-wrap gap-3 items-center`}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Type:</span>
+                <Select value={selectedJobType} onValueChange={setSelectedJobType}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    {jobTypes.map(type => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Location:</span>
+                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="All locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All locations</SelectItem>
+                    {locations.map(location => (
+                      <SelectItem key={location} value={location}>{location}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Sort by:</span>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest first</SelectItem>
+                    <SelectItem value="oldest">Oldest first</SelectItem>
+                    <SelectItem value="title">Title (A-Z)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X size={16} className="mr-1" />
+                Clear
               </Button>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Jobs List Section */}
+      <section className="py-10 px-4">
+        <div className="container mx-auto">
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="mt-4 text-muted-foreground">Loading available jobs...</p>
+            </div>
+          ) : filteredJobs.length === 0 ? (
+            <div className="text-center py-12">
+              <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No jobs match your criteria</h3>
+              <p className="text-muted-foreground mb-4">Try adjusting your filters or search terms</p>
+              <Button onClick={clearFilters}>Clear all filters</Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="group bg-white border border-border rounded-xl overflow-hidden hover:shadow-lg hover:border-primary transition-all duration-300"
+                >
+                  {/* Job Header */}
+                  <div className="p-6 pb-0">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">
+                          {job.title}
+                        </h3>
+                        <p className="text-base text-muted-foreground mt-1">
+                          {job.company?.name}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="ml-2">{job.job_type?.name}</Badge>
+                    </div>
+                  </div>
+
+                  {/* Job Meta */}
+                  <div className="px-6 pb-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin size={16} />
+                        {job.location_text}
+                      </div>
+                      {job.salary_range && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <DollarSign size={16} />
+                          {job.salary_range}
+                        </div>
+                      )}
+                      {job.created_at && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock size={16} />
+                          Posted {new Date(job.created_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Description Preview */}
+                  <div className="px-6 pb-4">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {job.description}
+                    </p>
+                  </div>
+
+                  {/* CTA Buttons */}
+                  <div className="px-6 pb-6 flex gap-3">
+                    <Link to={`/jobs/${job.id}`} className="flex-1">
+                      <Button className="w-full group-hover:gap-2 transition-all">
+                        View Details
+                        <ArrowRight size={16} className="ml-1" />
+                      </Button>
+                    </Link>
+                    <Button variant="outline" className="px-4">
+                      <Briefcase size={16} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Newsletter Section */}
+      {/* <section className="bg-blue-50 py-12 px-4">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h2 className="text-2xl font-bold text-foreground mb-3">
+            Don't see the right fit?
+          </h2>
+          <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+            Sign up for job alerts and we'll notify you when new positions that match your interests become available.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <Input placeholder="Enter your email" className="flex-1" />
+            <Button>Subscribe</Button>
+          </div>
+        </div>
+      </section> */}
     </Layout>
   );
 }

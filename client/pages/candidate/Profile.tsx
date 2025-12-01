@@ -10,7 +10,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
 import { candidateApi, applicationsApi } from '@/services/api';
 import { Application, CandidateProfile } from '@shared/api';
-import { Edit2, Save, X, CheckCircle, Clock, XCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { Edit2, Save, X, CheckCircle, Clock, XCircle, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -42,11 +42,11 @@ export default function ProfilePage() {
         setLoading(true);
         const [profileData, applicationsData] = await Promise.all([
           candidateApi.getMyProfile(),
-          applicationsApi.getApplications(1, 100),
+          applicationsApi.getApplications({ candidate_user_id: user.id }),
         ]);
 
         if (profileData) {
-          setProfile(profileData);
+          setProfile(profileData as CandidateProfile);
           setFormData({
             firstName: profileData.first_name || '',
             lastName: profileData.last_name || '',
@@ -60,7 +60,10 @@ export default function ProfilePage() {
           });
         }
 
-        setApplications(applicationsData.data || []);
+        // Handle different response structures for applications
+        const applicationsResponse = applicationsData as any;
+        const applicationsList = applicationsResponse?.applications || applicationsResponse?.data || [];
+        setApplications(applicationsList);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load profile');
       } finally {
@@ -83,15 +86,41 @@ export default function ProfilePage() {
     try {
       setSaving(true);
       setError('');
+
+      // Update basic profile info
       const updated = await candidateApi.updateProfile({
         first_name: formData.firstName,
         last_name: formData.lastName,
         phone: formData.phone,
         bio: formData.coverLetter,
-        // Note: skills, experience, education need to be handled separately via their respective APIs
+        earliest_join_date: profile?.earliest_join_date,
+        country_id: profile?.country_id,
+        city_id: profile?.city_id,
+        area_id: profile?.area_id,
+        linkedin_url: profile?.linkedin_url,
+        github_url: profile?.github_url,
+        portfolio_url: profile?.portfolio_url,
+        blog_url: profile?.blog_url,
       });
 
-      setProfile(updated);
+      // Handle skills update
+      if (formData.skills) {
+        const skillNames = formData.skills.split(',').map(s => s.trim()).filter(Boolean);
+        const currentSkillNames = profile?.skills?.map(s => s.skill?.name).filter(Boolean) || [];
+        
+        // Add new skills
+        for (const skillName of skillNames) {
+          if (!currentSkillNames.includes(skillName)) {
+            try {
+              await candidateApi.addSkill({ skill_id: 0, custom_skill_name: skillName });
+            } catch (err) {
+              console.warn(`Failed to add skill ${skillName}:`, err);
+            }
+          }
+        }
+      }
+
+      setProfile(updated as CandidateProfile);
       setEditing(false);
       setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -116,6 +145,8 @@ export default function ProfilePage() {
         return <CheckCircle size={18} className="text-orange-500" />;
       case 'offered':
         return <CheckCircle size={18} className="text-green-600" />;
+      case 'withdrawn':
+        return <XCircle size={18} className="text-gray-500" />;
       default:
         return <Clock size={18} className="text-muted-foreground" />;
     }
@@ -130,8 +161,31 @@ export default function ProfilePage() {
       video_call: 'Video Call',
       interview: 'Interview',
       offered: 'Offered',
+      withdrawn: 'Withdrawn',
     };
     return labels[status] || status;
+  };
+
+  const handleWithdrawApplication = async (applicationId: number) => {
+    if (!user?.id) return;
+    if (!window.confirm('Are you sure you want to withdraw this application? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await candidateApi.withdrawApplication(applicationId);
+      
+      // Refresh applications list
+      const applicationsData = await applicationsApi.getApplications({ candidate_user_id: user.id });
+      const applicationsResponse = applicationsData as any;
+      const applicationsList = applicationsResponse?.applications || applicationsResponse?.data || [];
+      setApplications(applicationsList);
+      
+      setSuccessMessage('Application withdrawn successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to withdraw application');
+    }
   };
 
   if (loading) {
@@ -460,6 +514,17 @@ export default function ProfilePage() {
                                     {getStatusLabel(app.status?.name || '')}
                                   </span>
                                 </div>
+                                {app.status?.name !== 'withdrawn' && app.status?.name !== 'rejected' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleWithdrawApplication(app.id)}
+                                    className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 size={14} className="mr-1" />
+                                    Withdraw
+                                  </Button>
+                                )}
                               </div>
                             </div>
 

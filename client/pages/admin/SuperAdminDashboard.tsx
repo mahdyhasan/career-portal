@@ -128,7 +128,17 @@ export default function SuperAdminDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <Button
+                    variant="outline"
+                    className="h-auto p-4 flex flex-col items-start gap-2"
+                    onClick={() => navigate('/admin/create-job')}
+                  >
+                    <Plus className="h-5 w-5" />
+                    <span className="font-medium">Create Job</span>
+                    <span className="text-xs text-muted-foreground">Post a new job opening</span>
+                  </Button>
+                  
                   <Button
                     variant="outline"
                     className="h-auto p-4 flex flex-col items-start gap-2"
@@ -190,6 +200,7 @@ export default function SuperAdminDashboard() {
                     +{stats?.recentActivity.new_users} this week
                   </Badge>
                 </div>
+  +++++++ REPLACE
               </CardContent>
             </Card>
 

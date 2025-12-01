@@ -444,6 +444,7 @@ export interface CandidateFilters {
   search?: string;
   status_id?: number;
   job_id?: number;
+  candidate_user_id?: number;
   skills?: number[];
   education_degree?: string;
   location?: {
@@ -470,8 +471,11 @@ export interface DemoResponse {
 }
 
 export interface JobsListResponse {
-  jobs: Job[];
+  data: Job[];
   total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface ApplicationsListResponse {

@@ -203,14 +203,25 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
 
     const jobData: CreateJobRequest = req.body;
 
+    console.log('Create job request headers:', req.headers);
+    console.log('Create job request body:', jobData);
+    console.log('Create job raw body:', req.body);
+
     // Validate required fields
-    if (!jobData.title || !jobData.company_id || !jobData.department_id || 
+    if (!jobData || !jobData.title || !jobData.company_id || !jobData.department_id || 
         !jobData.experience_level_id || !jobData.job_type_id || !jobData.description) {
       return res.status(400).json({
         message: 'Required fields are missing',
-        code: 'VALIDATION_ERROR'
+        code: 'VALIDATION_ERROR',
+        details: jobData
       });
     }
+
+    // Get default status ID (Draft)
+    const statusResult = await findOne<{ id: number }>(`
+      SELECT id FROM job_statuses WHERE name = 'Draft' LIMIT 1
+    `);
+    const defaultStatusId = statusResult?.id || 1;
 
     const insertResult = await executeSingleQuery(`
       INSERT INTO jobs (
@@ -218,7 +229,7 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
         department_id, experience_level_id, job_type_id, status_id, 
         description, key_responsibilities, requirements, benefits, 
         salary_range, location_text
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       jobData.title,
       req.user.id,
@@ -227,6 +238,7 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
       jobData.department_id,
       jobData.experience_level_id,
       jobData.job_type_id,
+      defaultStatusId,
       jobData.description,
       jobData.key_responsibilities,
       jobData.requirements,
