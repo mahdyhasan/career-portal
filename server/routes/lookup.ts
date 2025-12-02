@@ -1,83 +1,98 @@
+// server/routes/lookup.ts
 import { RequestHandler } from 'express';
-import { executeQuery, executeSingleQuery } from '../config/database';
+import { executeQuery, executeSingleQuery, findOne } from '../config/database';
+import { 
+  JobFormField, 
+  ApplicationStatus, 
+  JobStatus, 
+  JobType, 
+  ExperienceLevel,
+  Department,
+  Area,
+  Skill
+} from '@shared/api';
 
-// Get job statuses
+// Get job statuses (from job_statuses table)
 export const handleGetJobStatuses: RequestHandler = async (_req, res) => {
   try {
-    const jobStatuses = await executeQuery<any>(
-      'SELECT id, name FROM job_statuses ORDER BY name'
+    const jobStatuses = await executeQuery<JobStatus>(
+      'SELECT id, name FROM job_statuses ORDER BY id'
     );
     res.json(jobStatuses);
   } catch (error) {
     console.error('Error fetching job statuses:', error);
-    res.status(500).json({ message: 'Failed to fetch job statuses' });
+    res.status(500).json({ 
+      message: 'Failed to fetch job statuses',
+      code: 'FETCH_JOB_STATUSES_FAILED'
+    });
   }
 };
 
-// Get job types
+// Get job types (from job_types table)
 export const handleGetJobTypes: RequestHandler = async (_req, res) => {
   try {
-    const jobTypes = await executeQuery<any>(
-      'SELECT id, name FROM job_types ORDER BY name'
+    const jobTypes = await executeQuery<JobType>(
+      'SELECT id, name FROM job_types ORDER BY id'
     );
     res.json(jobTypes);
   } catch (error) {
     console.error('Error fetching job types:', error);
-    res.status(500).json({ message: 'Failed to fetch job types' });
+    res.status(500).json({ 
+      message: 'Failed to fetch job types',
+      code: 'FETCH_JOB_TYPES_FAILED'
+    });
   }
 };
 
-// Get experience levels
+// Get experience levels (from job_experience_levels table)
 export const handleGetExperienceLevels: RequestHandler = async (_req, res) => {
   try {
-    const experienceLevels = await executeQuery<any>(
-      'SELECT id, name FROM job_experience_levels ORDER BY name'
+    const experienceLevels = await executeQuery<ExperienceLevel>(
+      'SELECT id, name FROM job_experience_levels ORDER BY id'
     );
     res.json(experienceLevels);
   } catch (error) {
     console.error('Error fetching experience levels:', error);
-    res.status(500).json({ message: 'Failed to fetch experience levels' });
+    res.status(500).json({ 
+      message: 'Failed to fetch experience levels',
+      code: 'FETCH_EXPERIENCE_LEVELS_FAILED'
+    });
   }
 };
 
-// Get companies (not in new schema, return empty array)
-export const handleGetCompanies: RequestHandler = async (_req, res) => {
-  try {
-    // Companies table doesn't exist in new schema, return empty array
-    res.json([]);
-  } catch (error) {
-    console.error('Error fetching companies:', error);
-    res.status(500).json({ message: 'Failed to fetch companies' });
-  }
-};
-
-// Get departments
+// Get departments (from system_departments table)
 export const handleGetDepartments: RequestHandler = async (_req, res) => {
   try {
-    const departments = await executeQuery<any>(
+    const departments = await executeQuery<Department>(
       'SELECT id, name FROM system_departments ORDER BY name'
     );
     res.json(departments);
   } catch (error) {
     console.error('Error fetching departments:', error);
-    res.status(500).json({ message: 'Failed to fetch departments' });
+    res.status(500).json({ 
+      message: 'Failed to fetch departments',
+      code: 'FETCH_DEPARTMENTS_FAILED'
+    });
   }
 };
 
-// Get application statuses
+// Get application statuses (from application_statuses table)
 export const handleGetApplicationStatuses: RequestHandler = async (_req, res) => {
   try {
-    const applicationStatuses = await executeQuery<any>(
-      'SELECT id, name FROM application_statuses ORDER BY name'
+    const applicationStatuses = await executeQuery<ApplicationStatus>(
+      'SELECT id, name FROM application_statuses ORDER BY id'
     );
     res.json(applicationStatuses);
   } catch (error) {
     console.error('Error fetching application statuses:', error);
-    res.status(500).json({ message: 'Failed to fetch application statuses' });
+    res.status(500).json({ 
+      message: 'Failed to fetch application statuses',
+      code: 'FETCH_APPLICATION_STATUSES_FAILED'
+    });
   }
 };
 
-// Get skills with optional search and approval filter
+// Get skills (from system_skills table)
 export const handleGetSkills: RequestHandler = async (req, res) => {
   try {
     const { search, approved } = req.query;
@@ -100,78 +115,56 @@ export const handleGetSkills: RequestHandler = async (req, res) => {
 
     query += ' ORDER BY name LIMIT 50';
 
-    const skills = await executeQuery<any>(query, params);
-    
+    const skills = await executeQuery<Skill>(query, params);
     res.json(skills);
   } catch (error) {
     console.error('Error fetching skills:', error);
-    res.status(500).json({ message: 'Failed to fetch skills' });
+    res.status(500).json({ 
+      message: 'Failed to fetch skills',
+      code: 'FETCH_SKILLS_FAILED'
+    });
   }
 };
 
-// Get industries (not in new schema, return empty array)
-export const handleGetIndustries: RequestHandler = async (_req, res) => {
-  try {
-    // Industries table doesn't exist in new schema, return empty array
-    res.json([]);
-  } catch (error) {
-    console.error('Error fetching industries:', error);
-    res.status(500).json({ message: 'Failed to fetch industries' });
-  }
-};
-
-// Get countries (not in new schema, return empty array)
-export const handleGetCountries: RequestHandler = async (_req, res) => {
-  try {
-    // Countries table doesn't exist in new schema, return empty array
-    res.json([]);
-  } catch (error) {
-    console.error('Error fetching countries:', error);
-    res.status(500).json({ message: 'Failed to fetch countries' });
-  }
-};
-
-// Get cities by country (not in new schema, return empty array)
-export const handleGetCities: RequestHandler = async (_req, res) => {
-  try {
-    // Cities table doesn't exist in new schema, return empty array
-    res.json([]);
-  } catch (error) {
-    console.error('Error fetching cities:', error);
-    res.status(500).json({ message: 'Failed to fetch cities' });
-  }
-};
-
-// Get areas (simplified for new schema)
+// Get areas (from system_areas table)
 export const handleGetAreas: RequestHandler = async (_req, res) => {
   try {
-    const areas = await executeQuery<any>(
+    const areas = await executeQuery<Area>(
       'SELECT id, name FROM system_areas ORDER BY name'
     );
     res.json(areas);
   } catch (error) {
     console.error('Error fetching areas:', error);
-    res.status(500).json({ message: 'Failed to fetch areas' });
+    res.status(500).json({ 
+      message: 'Failed to fetch areas',
+      code: 'FETCH_AREAS_FAILED'
+    });
   }
 };
 
-// Create new skill (pending approval)
+// Create new skill (in system_skills table)
 export const handleCreateSkill: RequestHandler = async (req, res) => {
   try {
     const { name } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ message: 'Skill name is required' });
+      return res.status(400).json({ 
+        message: 'Skill name is required',
+        code: 'VALIDATION_ERROR'
+      });
     }
 
     // Check if skill already exists
-    const existingSkill = await executeQuery<any>(
+    const existingSkill = await findOne<Skill>(
       'SELECT id FROM system_skills WHERE name = ?',
       [name.trim()]
     );
 
-    if (existingSkill.length > 0) {
-      return res.status(409).json({ message: 'Skill already exists' });
+    if (existingSkill) {
+      return res.status(409).json({ 
+        message: 'Skill already exists',
+        code: 'DUPLICATE_RESOURCE'
+      });
     }
 
     // Insert new skill as pending approval
@@ -180,14 +173,53 @@ export const handleCreateSkill: RequestHandler = async (req, res) => {
       [name.trim()]
     );
 
-    const newSkill = await executeQuery<any>(
+    const newSkill = await findOne<Skill>(
       'SELECT id, name, is_approved FROM system_skills WHERE id = ?',
       [result.insertId]
     );
 
-    res.status(201).json(newSkill[0]);
+    res.status(201).json(newSkill);
   } catch (error) {
     console.error('Error creating skill:', error);
-    res.status(500).json({ message: 'Failed to create skill' });
+    res.status(500).json({ 
+      message: 'Failed to create skill',
+      code: 'CREATE_SKILL_FAILED'
+    });
+  }
+};
+
+// DEPRECATED: Companies table doesn't exist in current schema
+export const handleGetCompanies: RequestHandler = async (_req, res) => {
+  res.json([]); // Return empty array for backward compatibility
+};
+
+// DEPRECATED: Industries table doesn't exist in current schema
+export const handleGetIndustries: RequestHandler = async (_req, res) => {
+  res.json([]); // Return empty array for backward compatibility
+};
+
+// DEPRECATED: Countries table doesn't exist in current schema
+export const handleGetCountries: RequestHandler = async (_req, res) => {
+  res.json([]); // Return empty array for backward compatibility
+};
+
+// DEPRECATED: Cities table doesn't exist in current schema
+export const handleGetCities: RequestHandler = async (_req, res) => {
+  res.json([]); // Return empty array for backward compatibility
+};
+
+// Get job form fields (from job_form_fields table)
+export const handleGetJobFormFields: RequestHandler = async (_req, res) => {
+  try {
+    const jobFormFields = await executeQuery<JobFormField>(
+      'SELECT id, input_type, label FROM job_form_fields ORDER BY label'
+    );
+    res.json(jobFormFields);
+  } catch (error) {
+    console.error('Error fetching job form fields:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch job form fields',
+      code: 'FETCH_JOB_FORM_FIELDS_FAILED'
+    });
   }
 };

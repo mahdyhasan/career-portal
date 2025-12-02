@@ -9,7 +9,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DynamicFormBuilder } from '@/components/forms/DynamicFormBuilder';
 import { jobsApi, lookupApi } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
-import { JobFormField, Company, Department, JobType, ExperienceLevel } from '@shared/api';
+import { JobFormField, Department, JobType, ExperienceLevel } from '@shared/api';
 import { ArrowLeft, Loader2, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 export default function CreateJobPage() {
@@ -22,15 +22,16 @@ export default function CreateJobPage() {
   const [lookupLoading, setLookupLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // Use the useAuth hook with proper ES import
+  // Use's useAuth hook with proper ES import
   const { isAuthenticated, user, isLoading } = useAuth();
 
-  // Lookup data
-  const [companies, setCompanies] = useState<Company[]>([]);
+  // Lookup data - updated to match current database
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>([]);
   const [jobStatuses, setJobStatuses] = useState<any[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
+  const [availableFormFields, setAvailableFormFields] = useState<any[]>([]); // Form fields from database
 
   // Fetch lookup data on component mount
   useEffect(() => {
@@ -40,19 +41,21 @@ export default function CreateJobPage() {
     if (!isLoading && isAuthenticated) {
       const fetchLookupData = async () => {
         try {
-          const [companiesData, departmentsData, jobTypesData, experienceLevelsData, jobStatusesData] = await Promise.all([
-            lookupApi.getCompanies(),
+          const [departmentsData, jobTypesData, experienceLevelsData, jobStatusesData, areasData, formFieldsData] = await Promise.all([
             lookupApi.getDepartments(),
             lookupApi.getJobTypes(),
             lookupApi.getExperienceLevels(),
             lookupApi.getJobStatuses(),
+            lookupApi.getAreas(),
+            lookupApi.getJobFormFields(), // Fetch form fields from database
           ]);
 
-          setCompanies(companiesData);
           setDepartments(departmentsData);
           setJobTypes(jobTypesData);
           setExperienceLevels(experienceLevelsData);
           setJobStatuses(jobStatusesData);
+          setAreas(areasData);
+          setAvailableFormFields(formFieldsData); // Set form fields from database
         } catch (err) {
           console.error('Failed to fetch lookup data:', err);
           setError('Failed to load form options');
@@ -65,41 +68,24 @@ export default function CreateJobPage() {
     }
   }, [isAuthenticated, isLoading, user]);
 
-  const [formFields, setFormFields] = useState<any[]>([
-    {
-      id: 'field-1',
-      name: 'resume',
-      label: 'Upload Resume',
-      input_type_id: 1, // Assuming 1 is file type
-      is_required: true,
-      sort_order: 0,
-    },
-    {
-      id: 'field-2',
-      name: 'coverLetter',
-      label: 'Cover Letter',
-      input_type_id: 2, // Assuming 2 is textarea type
-      is_required: true,
-      sort_order: 1,
-    },
-  ]);
+  // Form fields are now empty by default - will be populated from database
+  const [formFields, setFormFields] = useState<any[]>([]);
 
-  // Initialize form with default values
+  // Initialize form with default values - updated to match database schema
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
-    company_id: '',
+    summary: '', // Changed from description to summary
     department_id: '',
     experience_level_id: '',
     job_type_id: '',
-    status_id: '', // Add status_id - required field
-    location_text: '',
-    salaryMin: '',
-    salaryMax: '',
-    currency: 'USD',
-    key_responsibilities: '',
+    status_id: '',
+    area_id: '', // Changed from location_text to area_id
+    salary_min: '', // Updated to match database field names
+    salary_max: '', // Updated to match database field names
+    responsibilities: '', // Changed from key_responsibilities
     requirements: '',
     benefits: '',
+    deadline: '', // Added deadline field
   });
 
   const handleChange = (
@@ -123,12 +109,8 @@ export default function CreateJobPage() {
       errors.title = 'Job title is required';
     }
     
-    if (!formData.description.trim()) {
-      errors.description = 'Job description is required';
-    }
-    
-    if (!formData.company_id) {
-      errors.company_id = 'Company is required';
+    if (!formData.summary.trim()) {
+      errors.summary = 'Job summary is required';
     }
     
     if (!formData.department_id) {
@@ -147,14 +129,12 @@ export default function CreateJobPage() {
       errors.status_id = 'Status is required';
     }
     
-    if (!formData.location_text.trim()) {
-      errors.location_text = 'Location is required';
-    }
+    // area_id is optional in database, so no validation required
     
     // Validate salary range if provided
-    if (formData.salaryMin && formData.salaryMax) {
-      const min = parseFloat(formData.salaryMin);
-      const max = parseFloat(formData.salaryMax);
+    if (formData.salary_min && formData.salary_max) {
+      const min = parseFloat(formData.salary_min);
+      const max = parseFloat(formData.salary_max);
       
       if (isNaN(min) || isNaN(max)) {
         errors.salary = 'Salary values must be numbers';
@@ -172,7 +152,7 @@ export default function CreateJobPage() {
     setError('');
     
     if (!validateForm()) {
-      setError('Please correct the errors below');
+      setError('Please correct errors below');
       return;
     }
 
@@ -184,16 +164,15 @@ export default function CreateJobPage() {
     try {
       setLoading(true);
 
-      // Prepare the job data with all required fields
+      // Prepare the job data with all required fields matching database schema
       const jobData = {
         title: formData.title.trim(),
-        company_id: parseInt(formData.company_id),
         department_id: parseInt(formData.department_id),
         experience_level_id: parseInt(formData.experience_level_id),
         job_type_id: parseInt(formData.job_type_id),
-        status_id: parseInt(formData.status_id), // Include status_id
-        description: formData.description.trim(),
-        key_responsibilities: formData.key_responsibilities
+        status_id: parseInt(formData.status_id),
+        summary: formData.summary.trim(), // Changed from description
+        responsibilities: formData.responsibilities
           .split('\n')
           .map(r => r.trim())
           .filter(Boolean).join('\n'),
@@ -205,18 +184,15 @@ export default function CreateJobPage() {
           .split('\n')
           .map(b => b.trim())
           .filter(Boolean).join('\n'),
-        salary_range: formData.salaryMin && formData.salaryMax 
-          ? `$${formData.salaryMin} - $${formData.salaryMax}` 
-          : undefined,
-        location_text: formData.location_text.trim(),
+        salary_min: formData.salary_min || null, // Updated field names
+        salary_max: formData.salary_max || null, // Updated field names
+        deadline: formData.deadline || null, // Added deadline
+        area_id: formData.area_id ? parseInt(formData.area_id) : null, // Updated from location_text
         form_fields: formFields.map(field => ({
-          ...field,
-          input_type_id: parseInt(field.input_type_id),
-          sort_order: parseInt(field.sort_order),
+          input_type: field.input_type, // Updated to match database
+          label: field.label,
+          is_required: field.is_required,
         })),
-        // Include the current user's ID for both created_by_user_id and hiring_manager_id
-        created_by_user_id: user.id,
-        hiring_manager_id: user.id,
       };
 
       // Debug log the data being sent
@@ -342,89 +318,61 @@ export default function CreateJobPage() {
                       </div>
 
                       <div>
-                        <Label htmlFor="description" className="text-sm font-medium mb-2 block">
-                          Job Description *
+                        <Label htmlFor="summary" className="text-sm font-medium mb-2 block">
+                          Job Summary *
                         </Label>
                         <Textarea
-                          id="description"
-                          name="description"
+                          id="summary"
+                          name="summary"
                           placeholder="Describe the job role, responsibilities, and what makes this position unique"
-                          value={formData.description}
+                          value={formData.summary}
                           onChange={handleChange}
                           rows={6}
                           disabled={loading}
-                          className={fieldErrors.description ? 'border-destructive' : ''}
+                          className={fieldErrors.summary ? 'border-destructive' : ''}
                         />
-                        {fieldErrors.description && (
-                          <p className="text-destructive text-xs mt-1">{fieldErrors.description}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <Label htmlFor="company_id" className="text-sm font-medium mb-2 block">
-                          Company *
-                        </Label>
-                        <select
-                          id="company_id"
-                          name="company_id"
-                          value={formData.company_id}
-                          onChange={handleChange}
-                          disabled={loading || lookupLoading}
-                          className={`w-full px-3 py-2 border rounded-lg ${fieldErrors.company_id ? 'border-destructive' : 'border-border'}`}
-                        >
-                          <option value="">Select a company</option>
-                          {companies.map((company) => (
-                            <option key={company.id} value={company.id}>
-                              {company.name}
-                            </option>
-                          ))}
-                        </select>
-                        {fieldErrors.company_id && (
-                          <p className="text-destructive text-xs mt-1">{fieldErrors.company_id}</p>
+                        {fieldErrors.summary && (
+                          <p className="text-destructive text-xs mt-1">{fieldErrors.summary}</p>
                         )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="location_text" className="text-sm font-medium mb-2 block">
-                            Location *
+                          <Label htmlFor="area_id" className="text-sm font-medium mb-2 block">
+                            Location
                           </Label>
-                          <Input
-                            id="location_text"
-                            name="location_text"
-                            placeholder="e.g., San Francisco, CA"
-                            value={formData.location_text}
+                          <select
+                            id="area_id"
+                            name="area_id"
+                            value={formData.area_id}
                             onChange={handleChange}
-                            disabled={loading}
-                            className={fieldErrors.location_text ? 'border-destructive' : ''}
-                          />
-                          {fieldErrors.location_text && (
-                            <p className="text-destructive text-xs mt-1">{fieldErrors.location_text}</p>
+                            disabled={loading || lookupLoading}
+                            className={`w-full px-3 py-2 border rounded-lg ${fieldErrors.area_id ? 'border-destructive' : 'border-border'}`}
+                          >
+                            <option value="">Select location</option>
+                            {areas.map((area) => (
+                              <option key={area.id} value={area.id}>
+                                {area.name}
+                              </option>
+                            ))}
+                          </select>
+                          {fieldErrors.area_id && (
+                            <p className="text-destructive text-xs mt-1">{fieldErrors.area_id}</p>
                           )}
                         </div>
 
                         <div>
-                          <Label htmlFor="job_type_id" className="text-sm font-medium mb-2 block">
-                            Job Type *
+                          <Label htmlFor="deadline" className="text-sm font-medium mb-2 block">
+                            Application Deadline
                           </Label>
-                          <select
-                            id="job_type_id"
-                            name="job_type_id"
-                            value={formData.job_type_id}
+                          <Input
+                            id="deadline"
+                            name="deadline"
+                            type="date"
+                            value={formData.deadline}
                             onChange={handleChange}
-                            disabled={loading || lookupLoading}
-                            className={`w-full px-3 py-2 border rounded-lg ${fieldErrors.job_type_id ? 'border-destructive' : 'border-border'}`}
-                          >
-                            <option value="">Select job type</option>
-                            {jobTypes.map((type) => (
-                              <option key={type.id} value={type.id}>
-                                {type.name}
-                              </option>
-                            ))}
-                          </select>
-                          {fieldErrors.job_type_id && (
-                            <p className="text-destructive text-xs mt-1">{fieldErrors.job_type_id}</p>
-                          )}
+                            disabled={loading}
+                          />
                         </div>
                       </div>
                     </div>
@@ -462,17 +410,16 @@ export default function CreateJobPage() {
                   <div>
                     <h3 className="text-xl font-bold text-foreground mb-6">Salary & Details</h3>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="salaryMin" className="text-sm font-medium mb-2 block">
+                          <Label htmlFor="salary_min" className="text-sm font-medium mb-2 block">
                             Salary Min
                           </Label>
                           <Input
-                            id="salaryMin"
-                            name="salaryMin"
-                            type="number"
+                            id="salary_min"
+                            name="salary_min"
                             placeholder="e.g., 100000"
-                            value={formData.salaryMin}
+                            value={formData.salary_min}
                             onChange={handleChange}
                             disabled={loading}
                             className={fieldErrors.salary ? 'border-destructive' : ''}
@@ -480,32 +427,17 @@ export default function CreateJobPage() {
                         </div>
 
                         <div>
-                          <Label htmlFor="salaryMax" className="text-sm font-medium mb-2 block">
+                          <Label htmlFor="salary_max" className="text-sm font-medium mb-2 block">
                             Salary Max
                           </Label>
                           <Input
-                            id="salaryMax"
-                            name="salaryMax"
-                            type="number"
+                            id="salary_max"
+                            name="salary_max"
                             placeholder="e.g., 150000"
-                            value={formData.salaryMax}
+                            value={formData.salary_max}
                             onChange={handleChange}
                             disabled={loading}
                             className={fieldErrors.salary ? 'border-destructive' : ''}
-                          />
-                        </div>
-
-                        <div>
-                          <Label htmlFor="currency" className="text-sm font-medium mb-2 block">
-                            Currency
-                          </Label>
-                          <Input
-                            id="currency"
-                            name="currency"
-                            placeholder="USD"
-                            value={formData.currency}
-                            onChange={handleChange}
-                            disabled={loading}
                           />
                         </div>
                       </div>
@@ -562,6 +494,30 @@ export default function CreateJobPage() {
                           )}
                         </div>
                       </div>
+
+                      <div>
+                        <Label htmlFor="job_type_id" className="text-sm font-medium mb-2 block">
+                          Job Type *
+                        </Label>
+                        <select
+                          id="job_type_id"
+                          name="job_type_id"
+                          value={formData.job_type_id}
+                          onChange={handleChange}
+                          disabled={loading || lookupLoading}
+                          className={`w-full px-3 py-2 border rounded-lg ${fieldErrors.job_type_id ? 'border-destructive' : 'border-border'}`}
+                        >
+                          <option value="">Select job type</option>
+                          {jobTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.name}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.job_type_id && (
+                          <p className="text-destructive text-xs mt-1">{fieldErrors.job_type_id}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -570,14 +526,14 @@ export default function CreateJobPage() {
                     <h3 className="text-xl font-bold text-foreground mb-6">Job Details</h3>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="key_responsibilities" className="text-sm font-medium mb-2 block">
+                        <Label htmlFor="responsibilities" className="text-sm font-medium mb-2 block">
                           Key Responsibilities (one per line)
                         </Label>
                         <Textarea
-                          id="key_responsibilities"
-                          name="key_responsibilities"
+                          id="responsibilities"
+                          name="responsibilities"
                           placeholder="Design and implement features&#10;Collaborate with team members&#10;Code review"
-                          value={formData.key_responsibilities}
+                          value={formData.responsibilities}
                           onChange={handleChange}
                           rows={3}
                           disabled={loading}
@@ -616,11 +572,20 @@ export default function CreateJobPage() {
                     </div>
                   </div>
 
-                  {/* Form Builder */}
-                  <DynamicFormBuilder
-                    fields={formFields}
-                    onChange={setFormFields}
-                  />
+                  {/* Application Form Fields - Now optional and from database */}
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground mb-6">Application Form Fields</h3>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Select which form fields should be included in the application form for this job. These fields come from the database and can be managed in the Lookup Management section.
+                      </p>
+                      <DynamicFormBuilder
+                        fields={formFields}
+                        onChange={setFormFields}
+                        availableFields={availableFormFields} // Pass available fields from database
+                      />
+                    </div>
+                  </div>
 
                   {/* Submit */}
                   <div className="flex gap-4 pt-8 border-t border-border">

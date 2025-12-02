@@ -5,25 +5,22 @@ import { parse } from 'url';
 
 dotenv.config();
 
-// Parse DATABASE_URL
 const databaseUrl = process.env.DATABASE_URL || 'mysql://root:@localhost:3306/augmex_career';
-const parsed = parse(databaseUrl);
+const parsed = new URL(databaseUrl);
 
 const dbConfig = {
   host: parsed.hostname || 'localhost',
   port: parseInt(parsed.port || '3306'),
-  user: parsed.auth?.split(':')[0] || 'root',
-  password: parsed.auth?.split(':')[1] || '',
-  database: parsed.pathname?.substring(1) || 'augmex_career',
+  user: parsed.username || 'root',
+  password: parsed.password || '',
+  database: parsed.pathname.substring(1) || 'augmex_career',
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
 };
 
-// Create connection pool
 const pool = mysql.createPool(dbConfig);
 
-// Test connection
 export async function testConnection() {
   try {
     const connection = await pool.getConnection();
@@ -37,7 +34,6 @@ export async function testConnection() {
   }
 }
 
-// Execute query with error handling
 export async function executeQuery<T = any>(
   query: string, 
   params: any[] = []
@@ -51,7 +47,6 @@ export async function executeQuery<T = any>(
   }
 }
 
-// Execute single query (INSERT, UPDATE, DELETE)
 export async function executeSingleQuery(
   query: string, 
   params: any[] = []
@@ -65,7 +60,6 @@ export async function executeSingleQuery(
   }
 }
 
-// Get single record
 export async function findOne<T = any>(
   query: string, 
   params: any[] = []
@@ -79,7 +73,20 @@ export async function findOne<T = any>(
   }
 }
 
-// Transaction helper
+// JSON helper for MySQL
+export function toMySQLJSON(value: any): string {
+  return JSON.stringify(value);
+}
+
+export function fromMySQLJSON<T = any>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function transaction<T>(
   callback: (connection: mysql.PoolConnection) => Promise<T>
 ): Promise<T> {
@@ -98,7 +105,6 @@ export async function transaction<T>(
   }
 }
 
-// Close connection pool
 export async function closeConnection() {
   await pool.end();
   console.log('Database connection closed');

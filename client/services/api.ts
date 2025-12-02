@@ -1,16 +1,10 @@
 // client/services/api.ts
-// Import types from shared API
 import type { 
-  Company, 
   Department, 
   ExperienceLevel, 
   JobType, 
   JobStatus, 
   ApplicationStatus,
-  ReferralSource,
-  InputType,
-  Country,
-  City,
   Area,
   User,
   CandidateProfile,
@@ -27,18 +21,15 @@ import type {
   CreateJobRequest,
   SubmitApplicationRequest,
   UpdateApplicationStatusRequest,
-  ApplicationFeedbackRequest,
   FileUploadResponse,
   JobFilters,
-  CandidateFilters,
+  ApplicationFilters,
   PaginatedResponse,
   DemoResponse,
   JobsListResponse,
   ApplicationsListResponse,
-  CandidatesListResponse,
-  SkillCreateRequest,
-  SkillsListResponse,
-  ApiError
+  ApiError,
+  Skill
 } from '@shared/api';
 
 const API_BASE_URL = '/api';
@@ -104,23 +95,17 @@ export const applicationsApi = {
     });
   },
   
-  getApplications: async (filters?: CandidateFilters) => {
-    if (filters) {
-      const params = new URLSearchParams();
-      if (filters.search) params.append('search', filters.search);
-      if (filters.status_id) params.append('status_id', filters.status_id.toString());
-      if (filters.job_id) params.append('job_id', filters.job_id.toString());
-      if (filters.candidate_user_id) params.append('candidate_user_id', filters.candidate_user_id.toString());
-      if (filters.skills) params.append('skills', filters.skills.join(','));
-      if (filters.location?.country_id) params.append('country_id', filters.location.country_id.toString());
-      if (filters.location?.city_id) params.append('city_id', filters.location.city_id.toString());
-      if (filters.location?.area_id) params.append('area_id', filters.location.area_id.toString());
-      if (filters.created_after) params.append('created_after', filters.created_after);
-      if (filters.created_before) params.append('created_before', filters.created_before);
-      
-      return apiFetch<ApplicationsListResponse>(`/applications?${params.toString()}`);
-    }
-    return apiFetch<ApplicationsListResponse>('/applications');
+  getApplications: async (filters?: ApplicationFilters) => {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.status_id) params.append('status_id', filters.status_id.toString());
+    if (filters?.job_id) params.append('job_id', filters.job_id.toString());
+    if (filters?.candidate_user_id) params.append('candidate_user_id', filters.candidate_user_id.toString());
+    if (filters?.created_after) params.append('created_after', filters.created_after);
+    if (filters?.created_before) params.append('created_before', filters.created_before);
+    
+    const queryString = params.toString();
+    return apiFetch<ApplicationsListResponse>(`/applications${queryString ? `?${queryString}` : ''}`);
   },
   
   getApplicationById: async (id: number): Promise<Application> => {
@@ -134,20 +119,15 @@ export const applicationsApi = {
     });
   },
   
-  submitApplicationFeedback: async (id: number, feedbackData: ApplicationFeedbackRequest) => {
-    return apiFetch(`/applications/${id}/feedback`, {
-      method: 'POST',
-      body: JSON.stringify(feedbackData),
+  withdrawApplication: async (applicationId: number) => {
+    return apiFetch(`/applications/${applicationId}/withdraw`, {
+      method: 'DELETE',
     });
   },
 };
 
 // Candidate Profile API
 export const candidateApi = {
-  getProfile: async () => {
-    return apiFetch('/candidate/profile');
-  },
-
   getMyProfile: async (): Promise<CandidateProfile> => {
     return apiFetch('/candidate/profile');
   },
@@ -211,12 +191,6 @@ export const candidateApi = {
       method: 'DELETE',
     });
   },
-
-  withdrawApplication: async (applicationId: number) => {
-    return apiFetch(`/applications/${applicationId}/withdraw`, {
-      method: 'DELETE',
-    });
-  },
   
   uploadFile: async (file: File): Promise<FileUploadResponse> => {
     const formData = new FormData();
@@ -258,10 +232,6 @@ export const authApi = {
     });
   },
   
-  getCurrentUser: async (): Promise<User> => {
-    return apiFetch('/auth/me');
-  },
-
   validateToken: async (): Promise<{ valid: boolean }> => {
     return apiFetch('/auth/validate');
   },
@@ -302,13 +272,12 @@ export const jobsApi = {
       ...(page && { page: page.toString() }),
       ...(limit && { limit: limit.toString() }),
       ...(filters?.search && { search: filters.search }),
-      ...(filters?.job_type_id && { job_type_id: filters.job_type_id.toString() }),
-      ...(filters?.experience_level_id && { experience_level_id: filters.experience_level_id.toString() }),
-      ...(filters?.company_id && { company_id: filters.company_id.toString() }),
       ...(filters?.department_id && { department_id: filters.department_id.toString() }),
-      ...(filters?.location && { location: filters.location }),
-      ...(filters?.salary_range && { salary_range: filters.salary_range }),
+      ...(filters?.experience_level_id && { experience_level_id: filters.experience_level_id.toString() }),
+      ...(filters?.job_type_id && { job_type_id: filters.job_type_id.toString() }),
+      ...(filters?.status_id && { status_id: filters.status_id.toString() }),
     }).toString();
+    
     return apiFetch<JobsListResponse>(`/jobs${params ? `?${params}` : ''}`);
   },
   
@@ -328,14 +297,14 @@ export const jobsApi = {
       method: 'DELETE',
     });
   },
+  
+  getJobStats: async () => {
+    return apiFetch('/jobs/stats');
+  },
 };
 
 // Lookup API
 export const lookupApi = {
-  getCompanies: async (): Promise<Company[]> => {
-    return apiFetch('/lookup/companies');
-  },
-  
   getDepartments: async (): Promise<Department[]> => {
     return apiFetch('/lookup/departments');
   },
@@ -352,66 +321,81 @@ export const lookupApi = {
     return apiFetch('/lookup/job-statuses');
   },
   
-  getApplicationStatuses: async () => {
+  getApplicationStatuses: async (): Promise<ApplicationStatus[]> => {
     return apiFetch('/lookup/application-statuses');
   },
   
-  getReferralSources: async () => {
-    return apiFetch('/lookup/referral-sources');
+  getAreas: async (): Promise<Area[]> => {
+    return apiFetch('/lookup/areas');
   },
   
-  getInputTypes: async () => {
-    return apiFetch('/lookup/input-types');
+  getSkills: async (search?: string, approved?: boolean): Promise<Skill[]> => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (approved !== undefined) params.append('approved', approved.toString());
+    
+    const queryString = params.toString();
+    return apiFetch(`/lookup/skills${queryString ? `?${queryString}` : ''}`);
   },
   
-  getCountries: async () => {
-    return apiFetch('/lookup/countries');
-  },
-  
-  getCities: async (countryId?: number) => {
-    const params = countryId ? `?country_id=${countryId}` : '';
-    return apiFetch(`/lookup/cities${params}`);
-  },
-  
-  getAreas: async (cityId?: number) => {
-    const params = cityId ? `?city_id=${cityId}` : '';
-    return apiFetch(`/lookup/areas${params}`);
-  },
-
-  getSkills: async (search?: string, approved?: boolean): Promise<any[]> => {
-    const params = new URLSearchParams({
-      ...(search && { search }),
-      ...(approved !== undefined && { approved: approved.toString() }),
-    }).toString();
-    return apiFetch(`/lookup/skills${params ? `?${params}` : ''}`);
-  },
-
-  createSkill: async (skillData: SkillCreateRequest): Promise<any> => {
+  createSkill: async (name: string): Promise<Skill> => {
     return apiFetch('/lookup/skills', {
       method: 'POST',
-      body: JSON.stringify(skillData),
+      body: JSON.stringify({ name }),
     });
+  },
+  
+  getJobFormFields: async (): Promise<JobFormField[]> => {
+    return apiFetch('/lookup/job-form-fields');
+  },
+  
+  // DEPRECATED: Remove non-existent endpoints
+  getCompanies: async (): Promise<any[]> => {
+    console.warn('getCompanies is deprecated - companies table removed');
+    return []; // Return empty array instead of calling removed endpoint
+  },
+  
+  getCountries: async (): Promise<any[]> => {
+    console.warn('getCountries is deprecated - countries table removed');
+    return []; // Return empty array instead of calling removed endpoint
+  },
+  
+  getCities: async (countryId?: number): Promise<any[]> => {
+    console.warn('getCities is deprecated - cities table removed');
+    return []; // Return empty array instead of calling removed endpoint
   },
 };
 
 // Admin API
 export const adminApi = {
-  getUsers: async (filters?: any) => {
-    const params = new URLSearchParams(filters).toString();
+  getUsers: async (filters?: { page?: number; limit?: number; search?: string }) => {
+    const params = new URLSearchParams({
+      ...(filters?.page && { page: filters.page.toString() }),
+      ...(filters?.limit && { limit: filters.limit.toString() }),
+      ...(filters?.search && { search: filters.search }),
+    }).toString();
+    
     return apiFetch(`/admin/users${params ? `?${params}` : ''}`);
   },
   
-  createUser: async (userData: any) => {
+  createUser: async (userData: { email: string; role_name: 'SuperAdmin' | 'HiringManager' | 'Candidate' }) => {
     return apiFetch('/admin/users', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
   },
   
-  updateUser: async (id: number, userData: any) => {
-    return apiFetch(`/admin/users/${id}`, {
+  updateUserStatus: async (id: number, is_active: boolean) => {
+    return apiFetch(`/admin/users/${id}/status`, {
       method: 'PUT',
-      body: JSON.stringify(userData),
+      body: JSON.stringify({ is_active }),
+    });
+  },
+  
+  updateUserRole: async (id: number, role_name: string) => {
+    return apiFetch(`/admin/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role_name }),
     });
   },
   
@@ -425,8 +409,8 @@ export const adminApi = {
     return apiFetch('/admin/stats');
   },
   
-  getAuditLog: async (filters?: any) => {
-    const params = new URLSearchParams(filters).toString();
+  getAuditLog: async (filters?: { page?: number; limit?: number; start_date?: string; end_date?: string }) => {
+    const params = new URLSearchParams(filters as any).toString();
     return apiFetch(`/admin/audit-log${params ? `?${params}` : ''}`);
   },
   

@@ -1,13 +1,11 @@
-//shared/api.ts
-import { ReactNode } from 'react';
-
+// shared/api.ts
 /**
  * Shared types between client and server
- * Used for type-safe API communication and data models
+ * Matches the ACTUAL database schema (lookup tables, not enums)
  */
 
 // ==========================================
-// 1. LOOKUP TYPES
+// 1. LOOKUP TABLE TYPES (with IDs)
 // ==========================================
 
 export interface Role {
@@ -17,17 +15,22 @@ export interface Role {
 
 export interface JobStatus {
   id: number;
-  name: string;
+  name: string; // Draft, Published, Closed, Archived
 }
 
 export interface JobType {
   id: number;
-  name: string;
+  name: string; // Full-time, Part-time, Contract, Remote
 }
 
 export interface ApplicationStatus {
   id: number;
-  name: string;
+  name: string; // Applied, Screening, Interview, Offer, Rejected, Withdrawn
+}
+
+export interface ExperienceLevel {
+  id: number;
+  name: string; // Intern, Junior, Mid-Level, Senior, Lead/Architect
 }
 
 export interface Department {
@@ -35,66 +38,19 @@ export interface Department {
   name: string;
 }
 
-export interface ExperienceLevel {
+export interface Area {
   id: number;
-  name: string;
+  name: string; // Banani, Gulshan 1, etc.
 }
 
-export interface SystemArea {
-  id: number;
-  name: string;
-}
-
-export interface SystemSkill {
+export interface Skill {
   id: number;
   name: string;
   is_approved: boolean;
 }
 
-export interface Company {
-  id: number;
-  name: string;
-  website?: string;
-  logo_url?: string;
-}
-
-export interface InputType {
-  id: number;
-  name: string;
-}
-
-export interface AchievementType {
-  id: number;
-  name: string;
-}
-
-export interface ReferralSource {
-  id: number;
-  name: string;
-}
-
 // ==========================================
-// 2. LOCATION TYPES
-// ==========================================
-
-export interface Country {
-  id: number;
-  name: string;
-}
-
-export interface City {
-  id: number;
-  country_id: number;
-  name: string;
-}
-
-export interface Area {
-  id: number;
-  name: string;
-}
-
-// ==========================================
-// 3. CORE USER & PROFILE TYPES
+// 2. CORE USER & PROFILE TYPES
 // ==========================================
 
 export interface User {
@@ -108,10 +64,11 @@ export interface User {
   created_at: string;
   updated_at: string;
   deleted_at?: string;
-  role?: Role;
   first_name?: string;
   last_name?: string;
   phone?: string;
+  // Joined relationship
+  role?: Role;
 }
 
 export interface CandidateProfile {
@@ -132,7 +89,7 @@ export interface CandidateProfile {
   
   // Joined relationships
   user?: User;
-  area?: SystemArea;
+  area?: Area;
   skills?: CandidateSkill[];
   education?: CandidateEducation[];
   achievements?: CandidateAchievement[];
@@ -140,9 +97,17 @@ export interface CandidateProfile {
 }
 
 // ==========================================
-// 4. JOBS & FORM BUILDER TYPES
+// 3. JOBS & FORM BUILDER TYPES
 // ==========================================
 
+// Global form field (from job_form_fields table)
+export interface JobFormField {
+  id: number;
+  input_type: 'checkbox' | 'number' | 'text' | 'textarea';
+  label: string;
+}
+
+// Job post with JSON field for form field IDs
 export interface Job {
   id: number;
   title: string;
@@ -157,6 +122,7 @@ export interface Job {
   salary_min?: string;
   salary_max?: string;
   deadline?: string;
+  form_field_id?: number | number[] | null; // JSON field
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -166,41 +132,19 @@ export interface Job {
   experience_level?: ExperienceLevel;
   job_type?: JobType;
   status?: JobStatus;
-  form_fields?: JobFormField[];
-}
-
-export interface JobFormField {
-  id: number;
-  job_id: number;
-  input_type: 'checkbox' | 'number' | 'text' | 'textarea';
-  label: string;
-  is_required: boolean;
-}
-
-export interface JobFormFieldOption {
-  id: number;
-  job_form_field_id: number;
-  option_label: string;
-  option_value: string;
-  sort_order: number;
+  form_fields?: JobFormField[]; // Populated from JSON IDs
 }
 
 // ==========================================
-// 5. SKILLS, EDUCATION, FILES (Candidate Data)
+// 4. CANDIDATE DATA
 // ==========================================
-
-export interface Skill {
-  id: number;
-  name: string;
-  is_approved: boolean;
-}
 
 export interface CandidateSkill {
-  id: number;
   candidate_profile_id: number;
   skill_id: number;
-  
-  // Joined relationships
+  proficiency?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  years_experience?: number;
+  // Joined relationship
   skill?: Skill;
 }
 
@@ -217,28 +161,22 @@ export interface CandidateEducation {
 export interface CandidateAchievement {
   id: number;
   candidate_profile_id: number;
-  achievement_type_id: number;
   title: string;
   description?: string;
-  issue_date?: string;
   url?: string;
-  
-  // Joined relationships
-  achievement_type?: AchievementType;
+  created_at: string;
 }
 
 export interface CandidateAttachment {
   id: number;
   candidate_profile_id: number;
-  file_type: string;
+  file_type: 'CV' | 'Portfolio' | 'Certificate' | 'Other';
   file_url: string;
-  file_size_kb: number;
-  mime_type?: string;
   uploaded_at: string;
 }
 
 // ==========================================
-// 6. APPLICATIONS & HISTORY TYPES
+// 5. APPLICATIONS & ANSWERS
 // ==========================================
 
 export interface Application {
@@ -246,7 +184,7 @@ export interface Application {
   job_id: number;
   candidate_user_id: number;
   status_id: number;
-  source: 'Direct' | 'Linkedin' | 'Facebook' | 'Referral';
+  source: 'Direct' | 'LinkedIn' | 'Facebook' | 'Referral' | 'Indeed';
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -267,37 +205,10 @@ export interface ApplicationAnswer {
   application_id: number;
   job_form_field_id: number;
   answer_text?: string;
-  
-  // Joined relationships
-  job_form_field?: JobFormField;
-}
-
-export interface ApplicationHistory {
-  id: number;
-  application_id: number;
-  previous_status_id?: number;
-  new_status_id: number;
-  changed_by_user_id: number;
-  notes?: string;
-  created_at: string;
-  
-  // Joined relationships
-  application?: Application;
-  previous_status?: ApplicationStatus;
-  new_status?: ApplicationStatus;
-  changed_by?: User;
-}
-
-export interface ApplicationUXFeedback {
-  id: number;
-  application_id: number;
-  rating: number;
-  comment?: string;
-  created_at: string;
 }
 
 // ==========================================
-// 7. REQUEST/RESPONSE TYPES
+// 6. REQUEST/RESPONSE TYPES
 // ==========================================
 
 // Authentication
@@ -341,35 +252,18 @@ export interface CandidateEducationRequest {
 }
 
 export interface CandidateAchievementRequest {
-  achievement_type_id: number;
   title: string;
   description?: string;
-  issue_date?: string;
   url?: string;
 }
 
 export interface CandidateSkillRequest {
-  skill_id: number;
-  // For custom skills
+  skill_id?: number;
   custom_skill_name?: string;
+  proficiency?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
 }
 
 // Job Management
-export type FormFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'file';
-
-export interface JobFormFieldRequest {
-  input_type_id: number;
-  label: string;
-  name: string;
-  is_required: boolean;
-  sort_order: number;
-  options?: Array<{
-    option_label: string;
-    option_value: string;
-    sort_order: number;
-  }>;
-}
-
 export interface CreateJobRequest {
   title: string;
   department_id: number;
@@ -382,22 +276,33 @@ export interface CreateJobRequest {
   salary_min?: string;
   salary_max?: string;
   deadline?: string;
-  form_fields?: Array<{
-    input_type: 'checkbox' | 'number' | 'text' | 'textarea';
-    label: string;
-    is_required: boolean;
-  }>;
+  form_field_ids?: number[]; // Array of form field IDs
 }
 
-// Application
+export interface UpdateJobRequest {
+  title?: string;
+  department_id?: number;
+  experience_level_id?: number;
+  job_type_id?: number;
+  status_id?: number;
+  summary?: string;
+  responsibilities?: string;
+  requirements?: string;
+  benefits?: string;
+  salary_min?: string;
+  salary_max?: string;
+  deadline?: string;
+  form_field_ids?: number[];
+}
+
+// Application Submission
 export interface SubmitApplicationRequest {
   job_id: number;
-  source: 'Direct' | 'Linkedin' | 'Facebook' | 'Referral';
+  source: 'Direct' | 'LinkedIn' | 'Facebook' | 'Referral' | 'Indeed';
   answers: Array<{
     job_form_field_id: number;
     answer_text?: string;
   }>;
-  candidate_profile?: CandidateProfileUpdateRequest;
 }
 
 export interface UpdateApplicationStatusRequest {
@@ -413,33 +318,24 @@ export interface ApplicationFeedbackRequest {
 // File Upload
 export interface FileUploadResponse {
   file_url: string;
-  file_size_kb: number;
-  mime_type: string;
+  file_size_kb?: number;
+  mime_type?: string;
 }
 
 // Filter and Search
 export interface JobFilters {
   search?: string;
-  job_type_id?: number;
-  experience_level_id?: number;
-  company_id?: number;
   department_id?: number;
-  location?: string;
-  salary_range?: string;
+  experience_level_id?: number;
+  job_type_id?: number;
+  status_id?: number;
 }
 
-export interface CandidateFilters {
+export interface ApplicationFilters {
   search?: string;
   status_id?: number;
   job_id?: number;
   candidate_user_id?: number;
-  skills?: number[];
-  education_degree?: string;
-  location?: {
-    country_id?: number;
-    city_id?: number;
-    area_id?: number;
-  };
   created_after?: string;
   created_before?: string;
 }
@@ -458,45 +354,23 @@ export interface DemoResponse {
   message: string;
 }
 
-export interface JobsListResponse {
-  data: Job[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface ApplicationsListResponse {
-  applications: Application[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-
-export interface CandidatesListResponse {
-  candidates: (Application & { 
-    jobTitle: string;
-    candidateProfile?: CandidateProfile;
-  })[];
-  total: number;
-}
-
-// Skills Management
-export interface SkillCreateRequest {
-  name: string;
-}
-
-export interface SkillsListResponse {
-  skills: Skill[];
-  total: number;
-}
-
 // Error Response
 export interface ApiError {
   message: string;
   code: string;
   details?: Record<string, any>;
+}
+
+// Form Builder Types
+export interface FormFieldOption {
+  option_label: string;
+  option_value: string;
+  sort_order: number;
+}
+
+// For creating new form fields
+export interface CreateJobFormFieldRequest {
+  input_type: 'checkbox' | 'number' | 'text' | 'textarea';
+  label: string;
+  options?: FormFieldOption[];
 }
