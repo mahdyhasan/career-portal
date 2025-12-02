@@ -23,10 +23,6 @@ import AdminCreateJob from "./pages/admin/CreateJob";
 import AdminCandidateManagement from "./pages/admin/CandidateManagement";
 import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
 import UserManagement from "./pages/admin/UserManagement";
-import AuditLog from "./pages/admin/AuditLog";
-import SystemConfiguration from "./pages/admin/SystemConfiguration";
-import DataExport from "./pages/admin/DataExport";
-import SystemStats from "./pages/admin/SystemStats";
 import JobsManagement from "./pages/admin/JobsManagement";
 import ApplicationsManagement from "./pages/admin/ApplicationsManagement";
 import SystemManagement from "./pages/admin/SystemManagement";
@@ -108,26 +104,6 @@ const App = () => (
           <Route path="/admin/users/create" element={
             <ProtectedRoute requireRole="SuperAdmin">
               <CreateUser />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/audit-log" element={
-            <ProtectedRoute requireRole="SuperAdmin">
-              <AuditLog />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/config" element={
-            <ProtectedRoute requireRole="SuperAdmin">
-              <SystemConfiguration />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/export" element={
-            <ProtectedRoute requireRole="SuperAdmin">
-              <DataExport />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/stats" element={
-            <ProtectedRoute requireRole="SuperAdmin">
-              <SystemStats />
             </ProtectedRoute>
           } />
           <Route path="/admin/system" element={

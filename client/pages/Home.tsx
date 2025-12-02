@@ -6,13 +6,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowRight, MapPin, DollarSign, Briefcase, Clock, Search, Filter, ChevronDown, X } from 'lucide-react';
+import { ArrowRight, MapPin, DollarSign, Briefcase, Clock, Search, Filter, ChevronDown, X, Plus } from 'lucide-react';
 import { jobsApi } from '@/services/api';
-import { Job, JobsListResponse } from '@shared/api';
+import { Job, PaginatedResponse } from '@shared/api';
+
+// Extended interface for jobs with joined fields from API
+interface JobWithDetails extends Job {
+  department_name?: string;
+  job_type_name?: string;
+  experience_level_name?: string;
+  status_name?: string;
+}
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Home() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
+  const { isAuthenticated, isAdmin, isSuperAdmin } = useAuth();
+  const [jobs, setJobs] = useState<JobWithDetails[]>([]);
+  const [filteredJobs, setFilteredJobs] = useState<JobWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedJobType, setSelectedJobType] = useState('all');
@@ -26,16 +36,16 @@ export default function Home() {
     // Get all jobs for the main page
     const loadJobs = async () => {
       try {
-        const response = await jobsApi.getJobs() as JobsListResponse;
+        const response = await jobsApi.getJobs() as PaginatedResponse<JobWithDetails>;
         const jobsData = response.data;
         setJobs(jobsData);
         setFilteredJobs(jobsData);
         
         // Extract unique job types and locations for filters
-        const types = [...new Set(jobsData.map(job => job.job_type?.name).filter(Boolean))] as string[];
-        const locs = [...new Set(jobsData.map(job => job.location_text).filter(Boolean))] as string[];
+        const types = [...new Set(jobsData.map(job => job.job_type_name).filter(Boolean))] as string[];
+        const depts = [...new Set(jobsData.map(job => job.department_name).filter(Boolean))] as string[];
         setJobTypes(types);
-        setLocations(locs);
+        setLocations(depts);
       } catch (error) {
         console.error('Failed to load jobs:', error);
       } finally {
@@ -54,19 +64,18 @@ export default function Home() {
     if (searchTerm) {
       result = result.filter(job => 
         job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        job.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        job.company?.name.toLowerCase().includes(searchTerm.toLowerCase())
+        job.summary.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
     // Filter by job type
     if (selectedJobType !== 'all') {
-      result = result.filter(job => job.job_type?.name === selectedJobType);
+      result = result.filter(job => job.job_type_name === selectedJobType);
     }
     
     // Filter by location
     if (selectedLocation !== 'all') {
-      result = result.filter(job => job.location_text === selectedLocation);
+      result = result.filter(job => job.department_name === selectedLocation);
     }
     
     // Sort jobs
@@ -151,6 +160,16 @@ export default function Home() {
                 {filteredJobs.length} {filteredJobs.length === 1 ? 'position' : 'positions'} found
               </span>
             </div>
+
+            {/* Post a Job Button for HiringManager and SuperAdmin */}
+            {(isAdmin || isSuperAdmin) && (
+              <Link to="/admin/create-job">
+                <Button size="sm" className="gap-2">
+                  <Plus size={16} />
+                  Post a Job
+                </Button>
+              </Link>
+            )}
             
             <div className={`${showFilters ? 'flex' : 'hidden md:flex'} flex-wrap gap-3 items-center`}>
               <div className="flex items-center gap-2">
@@ -236,10 +255,10 @@ export default function Home() {
                           {job.title}
                         </h3>
                         <p className="text-base text-muted-foreground mt-1">
-                          {job.company?.name}
+                          {job.department_name}
                         </p>
                       </div>
-                      <Badge variant="secondary" className="ml-2">{job.job_type?.name}</Badge>
+                      <Badge variant="secondary" className="ml-2">{job.job_type_name}</Badge>
                     </div>
                   </div>
 
@@ -248,12 +267,12 @@ export default function Home() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <MapPin size={16} />
-                        {job.location_text}
+                        {job.department_name}
                       </div>
-                      {job.salary_range && (
+                      {job.salary_min && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <DollarSign size={16} />
-                          {job.salary_range}
+                          {job.salary_min} - {job.salary_max}
                         </div>
                       )}
                       {job.created_at && (
@@ -267,8 +286,12 @@ export default function Home() {
 
                   {/* Description Preview */}
                   <div className="px-6 pb-4">
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {job.description}
+                    <p className="text-sm text-muted-foreground overflow-hidden" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical'
+                    }}>
+                      {job.summary}
                     </p>
                   </div>
 

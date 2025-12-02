@@ -32,21 +32,30 @@ export const handleLogin: RequestHandler = async (req, res) => {
 // Signup endpoint
 export const handleSignup: RequestHandler = async (req, res) => {
   try {
-    const signupData: SignupRequest = req.body;
+    const { email, password, firstName, lastName } = req.body;
     
-    if (!signupData.email || !signupData.password || !signupData.role) {
+    if (!email || !password) {
       return res.status(400).json({
-        message: 'Email, password, and role are required',
+        message: 'Email and password are required',
         code: 'VALIDATION_ERROR'
       });
     }
 
-    if (signupData.password.length < 6) {
+    if (password.length < 6) {
       return res.status(400).json({
         message: 'Password must be at least 6 characters long',
         code: 'VALIDATION_ERROR'
       });
     }
+
+    // HARD-CODE ROLE TO CANDIDATE - SECURITY FIX
+    const signupData: SignupRequest = {
+      email,
+      password,
+      role: 'Candidate', // Always set to Candidate
+      firstName,
+      lastName
+    };
 
     const result = await AuthService.registerUser(signupData);
     

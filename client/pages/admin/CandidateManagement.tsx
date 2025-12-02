@@ -51,7 +51,16 @@ export default function CandidateManagement() {
           jobsApi.getJobs(),
         ]);
 
-        setApplications(appsData.data);
+        // Process applications to add computed properties
+        const processedApplications = appsData.applications.map(app => ({
+          ...app,
+          candidateName: app.candidate 
+            ? `${app.candidate.first_name || ''} ${app.candidate.last_name || ''}`.trim() || 'Unknown'
+            : 'Unknown',
+          candidateEmail: app.candidate?.email || 'Unknown'
+        }));
+
+        setApplications(processedApplications);
         setJobs(jobsData.data);
       } catch (error) {
         console.error('Failed to load data:', error);

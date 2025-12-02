@@ -35,30 +35,6 @@ const navigation: NavItem[] = [
     href: '/admin/users',
     icon: Users,
     description: 'Manage user accounts and permissions'
-  },
-  {
-    title: 'System Statistics',
-    href: '/admin/stats',
-    icon: BarChart3,
-    description: 'Detailed analytics and reports'
-  },
-  {
-    title: 'Audit Log',
-    href: '/admin/audit-log',
-    icon: Activity,
-    description: 'View system activity and changes'
-  },
-  {
-    title: 'Data Export',
-    href: '/admin/export',
-    icon: Download,
-    description: 'Export system data and reports'
-  },
-  {
-    title: 'System Config',
-    href: '/admin/config',
-    icon: Settings,
-    description: 'Configure system settings and features'
   }
 ];
 

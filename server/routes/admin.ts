@@ -40,8 +40,8 @@ export const handleGetUsers: RequestHandler = async (req, res) => {
     let queryParams: any[] = [];
 
     if (search) {
-      whereClause += " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)";
-      queryParams = [`%${search}%`, `%${search}%`, `%${search}%`];
+      whereClause += " AND (u.email LIKE ?)";
+      queryParams = [`%${search}%`];
     }
 
     // Get total count
@@ -56,8 +56,6 @@ export const handleGetUsers: RequestHandler = async (req, res) => {
       SELECT 
         u.id,
         u.email,
-        u.first_name,
-        u.last_name,
         u.is_active,
         u.created_at,
         u.updated_at,
@@ -173,9 +171,9 @@ export const handleCreateUser: RequestHandler = async (req, res) => {
 
     // Create user
     const result = await executeSingleQuery(`
-      INSERT INTO users (email, password_hash, role_id, first_name, last_name, phone, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, [email, hashedPassword, roleId, first_name, last_name, phone]);
+      INSERT INTO users (email, password_hash, role_id, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [email, hashedPassword, roleId]);
 
     const newUserId = result.insertId;
 
@@ -184,9 +182,6 @@ export const handleCreateUser: RequestHandler = async (req, res) => {
       SELECT 
         u.id,
         u.email,
-        u.first_name,
-        u.last_name,
-        u.phone,
         u.is_active,
         u.created_at,
         u.updated_at,
@@ -201,9 +196,9 @@ export const handleCreateUser: RequestHandler = async (req, res) => {
     // Create candidate profile if role is Candidate
     if (role_name === 'Candidate') {
       await executeQuery(`
-        INSERT INTO candidate_profiles (user_id, first_name, last_name, created_at, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [newUserId, first_name, last_name]);
+        INSERT INTO candidate_profiles (user_id, created_at, updated_at)
+        VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [newUserId]);
     }
 
     return successResponse(res, HTTP_STATUS.CREATED, 'User created successfully', user);
@@ -274,28 +269,13 @@ export const handleUpdateUser: RequestHandler = async (req, res) => {
       }
     }
 
-    // Update user
+    // Update user (only email and is_active are supported in new schema)
     const updateFields = [];
     const updateValues = [];
 
     if (email !== undefined) {
       updateFields.push('email = ?');
       updateValues.push(email);
-    }
-
-    if (first_name !== undefined) {
-      updateFields.push('first_name = ?');
-      updateValues.push(first_name);
-    }
-
-    if (last_name !== undefined) {
-      updateFields.push('last_name = ?');
-      updateValues.push(last_name);
-    }
-
-    if (phone !== undefined) {
-      updateFields.push('phone = ?');
-      updateValues.push(phone);
     }
 
     if (is_active !== undefined) {
@@ -316,9 +296,6 @@ export const handleUpdateUser: RequestHandler = async (req, res) => {
       SELECT 
         u.id,
         u.email,
-        u.first_name,
-        u.last_name,
-        u.phone,
         u.is_active,
         u.created_at,
         u.updated_at,
@@ -467,9 +444,6 @@ export const handleUpdateUserRole: RequestHandler = async (req, res) => {
       SELECT 
         u.id,
         u.email,
-        u.first_name,
-        u.last_name,
-        u.phone,
         u.is_active,
         u.created_at,
         u.updated_at,
@@ -572,8 +546,8 @@ export const handleGetSystemStats: RequestHandler = async (req, res) => {
     const jobStats = await executeQuery(`
       SELECT 
         COUNT(*) as total_jobs,
-        COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_jobs
-      FROM jobs
+        COUNT(CASE WHEN status_id = 2 THEN 1 END) as active_jobs
+      FROM job_posts
       WHERE deleted_at IS NULL
     `);
 
@@ -768,14 +742,12 @@ export const handleExportData: RequestHandler = async (req, res) => {
 
     switch (type) {
       case 'users':
-        headers = 'ID,Email,First Name,Last Name,Role,Status,Created At\n';
+        headers = 'ID,Email,Role,Status,Created At\n';
         
         const users = await executeQuery(`
           SELECT 
             u.id,
             u.email,
-            u.first_name,
-            u.last_name,
             r.name as role_name,
             u.is_active,
             u.created_at
@@ -786,7 +758,7 @@ export const handleExportData: RequestHandler = async (req, res) => {
         `);
 
         data = users.map(user => 
-          `${user.id},"${user.email}","${user.first_name}","${user.last_name}","${user.role_name}","${user.is_active ? 'Active' : 'Inactive'}","${user.created_at}"`
+          `${user.id},"${user.email}","${user.role_name}","${user.is_active ? 'Active' : 'Inactive'}","${user.created_at}"`
         ).join('\n');
         break;
         
@@ -801,7 +773,7 @@ export const handleExportData: RequestHandler = async (req, res) => {
             s.name as status_name,
             a.created_at
           FROM applications a
-          JOIN jobs j ON a.job_id = j.id
+          JOIN job_posts j ON a.job_id = j.id
           JOIN users u ON a.candidate_user_id = u.id
           LEFT JOIN application_statuses s ON a.status_id = s.id
           WHERE a.deleted_at IS NULL

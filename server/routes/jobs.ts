@@ -1,6 +1,7 @@
 import { RequestHandler } from 'express';
 import { executeQuery, executeSingleQuery, findOne } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
+import { requireJobManagement, requireAuthenticated } from '../middleware/checkRole';
 import { 
   Job, 
   CreateJobRequest, 
@@ -22,21 +23,15 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
 
     let query = `
       SELECT j.*, 
-             c.name as company_name,
              d.name as department_name,
              el.name as experience_level_name,
              jt.name as job_type_name,
-             js.name as status_name,
-             u_created.email as created_by_email,
-             u_hiring.email as hiring_manager_email
-      FROM jobs j
-      LEFT JOIN companies c ON j.company_id = c.id
-      LEFT JOIN departments d ON j.department_id = d.id
-      LEFT JOIN experience_levels el ON j.experience_level_id = el.id
+             js.name as status_name
+      FROM job_posts j
+      LEFT JOIN system_departments d ON j.department_id = d.id
+      LEFT JOIN job_experience_levels el ON j.experience_level_id = el.id
       LEFT JOIN job_types jt ON j.job_type_id = jt.id
       LEFT JOIN job_statuses js ON j.status_id = js.id
-      LEFT JOIN users u_created ON j.created_by_user_id = u_created.id
-      LEFT JOIN users u_hiring ON j.hiring_manager_id = u_hiring.id
       WHERE j.deleted_at IS NULL
     `;
 
@@ -44,7 +39,7 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
 
     // Apply filters
     if (req.query.search) {
-      query += ' AND (j.title LIKE ? OR j.description LIKE ?)';
+      query += ' AND (j.title LIKE ? OR j.summary LIKE ?)';
       params.push(`%${req.query.search}%`, `%${req.query.search}%`);
     }
 
@@ -58,11 +53,6 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
       params.push(parseInt(req.query.experience_level_id as string));
     }
 
-    if (req.query.company_id) {
-      query += ' AND j.company_id = ?';
-      params.push(parseInt(req.query.company_id as string));
-    }
-
     query += ` ORDER BY j.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const jobs = await executeQuery<any>(query, params);
@@ -70,7 +60,7 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM jobs j
+      FROM job_posts j
       WHERE j.deleted_at IS NULL
     `;
 
@@ -78,7 +68,7 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
     let countFilterQuery = '';
 
     if (req.query.search) {
-      countFilterQuery += ' AND (j.title LIKE ? OR j.description LIKE ?)';
+      countFilterQuery += ' AND (j.title LIKE ? OR j.summary LIKE ?)';
       countParams.push(`%${req.query.search}%`, `%${req.query.search}%`);
     }
 
@@ -92,10 +82,6 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
       countParams.push(parseInt(req.query.experience_level_id as string));
     }
 
-    if (req.query.company_id) {
-      countFilterQuery += ' AND j.company_id = ?';
-      countParams.push(parseInt(req.query.company_id as string));
-    }
 
     const totalResult = await findOne<{ total: number }>(
       countQuery + countFilterQuery, 
@@ -134,21 +120,15 @@ export const handleGetJob: RequestHandler = async (req, res) => {
 
     const job = await findOne<any>(`
       SELECT j.*, 
-             c.name as company_name,
              d.name as department_name,
              el.name as experience_level_name,
              jt.name as job_type_name,
-             js.name as status_name,
-             u_created.email as created_by_email,
-             u_hiring.email as hiring_manager_email
-      FROM jobs j
-      LEFT JOIN companies c ON j.company_id = c.id
-      LEFT JOIN departments d ON j.department_id = d.id
-      LEFT JOIN experience_levels el ON j.experience_level_id = el.id
+             js.name as status_name
+      FROM job_posts j
+      LEFT JOIN system_departments d ON j.department_id = d.id
+      LEFT JOIN job_experience_levels el ON j.experience_level_id = el.id
       LEFT JOIN job_types jt ON j.job_type_id = jt.id
       LEFT JOIN job_statuses js ON j.status_id = js.id
-      LEFT JOIN users u_created ON j.created_by_user_id = u_created.id
-      LEFT JOIN users u_hiring ON j.hiring_manager_id = u_hiring.id
       WHERE j.id = ? AND j.deleted_at IS NULL
     `, [jobId]);
 
@@ -161,30 +141,10 @@ export const handleGetJob: RequestHandler = async (req, res) => {
 
     // Get form fields for this job
     const formFields = await executeQuery<any>(`
-      SELECT jff.*, 
-             it.id as input_type_id,
-             it.name as input_type_name
-      FROM job_form_fields jff
-      LEFT JOIN input_types it ON jff.input_type_id = it.id
-      WHERE jff.job_id = ?
-      ORDER BY jff.sort_order
+      SELECT *
+      FROM job_form_fields
+      WHERE job_id = ?
     `, [jobId]);
-
-    // Get options for each field separately
-    for (const field of formFields) {
-      const options = await executeQuery<any>(`
-        SELECT id, option_label, option_value, sort_order
-        FROM job_form_field_options
-        WHERE job_form_field_id = ?
-        ORDER BY sort_order
-      `, [field.id]);
-      
-      field.options = options;
-      field.input_type = {
-        id: field.input_type_id,
-        name: field.input_type_name
-      };
-    }
 
     job.form_fields = formFields;
 
@@ -198,16 +158,9 @@ export const handleGetJob: RequestHandler = async (req, res) => {
   }
 };
 
-// Create new job
+// Create new job - PROTECTED: Only HiringManager and SuperAdmin can create jobs
 export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
     const jobData: CreateJobRequest = req.body;
 
     console.log('Create job request headers:', req.headers);
@@ -215,8 +168,8 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
     console.log('Create job raw body:', req.body);
 
     // Validate required fields
-    if (!jobData || !jobData.title || !jobData.company_id || !jobData.department_id || 
-        !jobData.experience_level_id || !jobData.job_type_id || !jobData.description) {
+    if (!jobData || !jobData.title || !jobData.department_id || 
+        !jobData.experience_level_id || !jobData.job_type_id || !jobData.summary) {
       return res.status(400).json({
         message: 'Required fields are missing',
         code: 'VALIDATION_ERROR',
@@ -231,27 +184,24 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
     const defaultStatusId = statusResult?.id || 1;
 
     const insertResult = await executeSingleQuery(`
-      INSERT INTO jobs (
-        title, created_by_user_id, hiring_manager_id, company_id, 
-        department_id, experience_level_id, job_type_id, status_id, 
-        description, key_responsibilities, requirements, benefits, 
-        salary_range, location_text
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO job_posts (
+        title, department_id, experience_level_id, job_type_id, status_id, 
+        summary, responsibilities, requirements, benefits, 
+        salary_min, salary_max, deadline
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       jobData.title,
-      req.user.id,
-      jobData.hiring_manager_id || req.user.id,
-      jobData.company_id,
       jobData.department_id,
       jobData.experience_level_id,
       jobData.job_type_id,
       defaultStatusId,
-      jobData.description,
-      jobData.key_responsibilities,
+      jobData.summary,
+      jobData.responsibilities,
       jobData.requirements,
       jobData.benefits,
-      jobData.salary_range,
-      jobData.location_text
+      jobData.salary_min,
+      jobData.salary_max,
+      jobData.deadline
     ]);
 
     const jobId = insertResult.insertId;
@@ -260,43 +210,27 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
     if (jobData.form_fields && jobData.form_fields.length > 0) {
       for (const field of jobData.form_fields) {
         const fieldResult = await executeSingleQuery(`
-          INSERT INTO job_form_fields (job_id, input_type_id, label, name, is_required, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO job_form_fields (job_id, input_type, label, is_required)
+          VALUES (?, ?, ?, ?)
         `, [
           jobId,
-          field.input_type_id,
+          field.input_type,
           field.label,
-          field.name,
-          field.is_required,
-          field.sort_order
+          field.is_required
         ]);
-
-        const fieldId = fieldResult.insertId;
-
-        // Create field options if provided
-        if (field.options && field.options.length > 0) {
-          for (const option of field.options) {
-            await executeSingleQuery(`
-              INSERT INTO job_form_field_options (job_form_field_id, option_label, option_value, sort_order)
-              VALUES (?, ?, ?, ?)
-            `, [fieldId, option.option_label, option.option_value, option.sort_order]);
-          }
-        }
       }
     }
 
     // Return the created job
     const createdJob = await findOne<any>(`
       SELECT j.*, 
-             c.name as company_name,
              d.name as department_name,
              el.name as experience_level_name,
              jt.name as job_type_name,
              js.name as status_name
-      FROM jobs j
-      LEFT JOIN companies c ON j.company_id = c.id
-      LEFT JOIN departments d ON j.department_id = d.id
-      LEFT JOIN experience_levels el ON j.experience_level_id = el.id
+      FROM job_posts j
+      LEFT JOIN system_departments d ON j.department_id = d.id
+      LEFT JOIN job_experience_levels el ON j.experience_level_id = el.id
       LEFT JOIN job_types jt ON j.job_type_id = jt.id
       LEFT JOIN job_statuses js ON j.status_id = js.id
       WHERE j.id = ?
@@ -334,8 +268,8 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
 
     // Check if job exists and user has permission
     const existingJob = await findOne<any>(`
-      SELECT created_by_user_id, hiring_manager_id
-      FROM jobs
+      SELECT id
+      FROM job_posts
       WHERE id = ? AND deleted_at IS NULL
     `, [jobId]);
 
@@ -346,11 +280,9 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       });
     }
 
-    // Check permissions (SuperAdmin or creator/hiring manager)
+    // Check permissions (SuperAdmin only for now since new schema doesn't have created_by_user_id)
     const userRole = req.user.role?.name;
-    const canEdit = userRole === 'SuperAdmin' || 
-                   existingJob.created_by_user_id === req.user.id || 
-                   existingJob.hiring_manager_id === req.user.id;
+    const canEdit = userRole === 'SuperAdmin';
 
     if (!canEdit) {
       return res.status(403).json({
@@ -367,13 +299,13 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       updateFields.push('title = ?');
       updateParams.push(updateData.title);
     }
-    if (updateData.description) {
-      updateFields.push('description = ?');
-      updateParams.push(updateData.description);
+    if (updateData.summary) {
+      updateFields.push('summary = ?');
+      updateParams.push(updateData.summary);
     }
-    if (updateData.key_responsibilities) {
-      updateFields.push('key_responsibilities = ?');
-      updateParams.push(updateData.key_responsibilities);
+    if (updateData.responsibilities) {
+      updateFields.push('responsibilities = ?');
+      updateParams.push(updateData.responsibilities);
     }
     if (updateData.requirements) {
       updateFields.push('requirements = ?');
@@ -383,13 +315,17 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       updateFields.push('benefits = ?');
       updateParams.push(updateData.benefits);
     }
-    if (updateData.salary_range) {
-      updateFields.push('salary_range = ?');
-      updateParams.push(updateData.salary_range);
+    if (updateData.salary_min) {
+      updateFields.push('salary_min = ?');
+      updateParams.push(updateData.salary_min);
     }
-    if (updateData.location_text) {
-      updateFields.push('location_text = ?');
-      updateParams.push(updateData.location_text);
+    if (updateData.salary_max) {
+      updateFields.push('salary_max = ?');
+      updateParams.push(updateData.salary_max);
+    }
+    if (updateData.deadline) {
+      updateFields.push('deadline = ?');
+      updateParams.push(updateData.deadline);
     }
     if (updateData.status_id) {
       updateFields.push('status_id = ?');
@@ -407,7 +343,7 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
     updateParams.push(jobId);
 
     await executeQuery(`
-      UPDATE jobs
+      UPDATE job_posts
       SET ${updateFields.join(', ')}
       WHERE id = ?
     `, updateParams);
@@ -415,15 +351,13 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
     // Return updated job
     const updatedJob = await findOne<any>(`
       SELECT j.*, 
-             c.name as company_name,
              d.name as department_name,
              el.name as experience_level_name,
              jt.name as job_type_name,
              js.name as status_name
-      FROM jobs j
-      LEFT JOIN companies c ON j.company_id = c.id
-      LEFT JOIN departments d ON j.department_id = d.id
-      LEFT JOIN experience_levels el ON j.experience_level_id = el.id
+      FROM job_posts j
+      LEFT JOIN system_departments d ON j.department_id = d.id
+      LEFT JOIN job_experience_levels el ON j.experience_level_id = el.id
       LEFT JOIN job_types jt ON j.job_type_id = jt.id
       LEFT JOIN job_statuses js ON j.status_id = js.id
       WHERE j.id = ?
@@ -467,7 +401,7 @@ export const handleDeleteJob: RequestHandler = async (req: AuthRequest, res) => 
     }
 
     await executeQuery(`
-      UPDATE jobs
+      UPDATE job_posts
       SET deleted_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [jobId]);
@@ -508,7 +442,7 @@ export const handleGetJobStats: RequestHandler = async (req: AuthRequest, res) =
         SUM(CASE WHEN js.name = 'Published' THEN 1 ELSE 0 END) as published,
         SUM(CASE WHEN js.name = 'Draft' THEN 1 ELSE 0 END) as draft,
         SUM(CASE WHEN js.name = 'Closed' THEN 1 ELSE 0 END) as closed
-      FROM jobs j
+      FROM job_posts j
       LEFT JOIN job_statuses js ON j.status_id = js.id
       ${whereClause}
     `, params);

@@ -31,7 +31,7 @@ export const handleGetJobTypes: RequestHandler = async (_req, res) => {
 export const handleGetExperienceLevels: RequestHandler = async (_req, res) => {
   try {
     const experienceLevels = await executeQuery<any>(
-      'SELECT id, name FROM experience_levels ORDER BY name'
+      'SELECT id, name FROM job_experience_levels ORDER BY name'
     );
     res.json(experienceLevels);
   } catch (error) {
@@ -40,13 +40,11 @@ export const handleGetExperienceLevels: RequestHandler = async (_req, res) => {
   }
 };
 
-// Get companies
+// Get companies (not in new schema, return empty array)
 export const handleGetCompanies: RequestHandler = async (_req, res) => {
   try {
-    const companies = await executeQuery<any>(
-      'SELECT id, name, website, logo_url FROM companies ORDER BY name'
-    );
-    res.json(companies);
+    // Companies table doesn't exist in new schema, return empty array
+    res.json([]);
   } catch (error) {
     console.error('Error fetching companies:', error);
     res.status(500).json({ message: 'Failed to fetch companies' });
@@ -57,7 +55,7 @@ export const handleGetCompanies: RequestHandler = async (_req, res) => {
 export const handleGetDepartments: RequestHandler = async (_req, res) => {
   try {
     const departments = await executeQuery<any>(
-      'SELECT id, name FROM departments ORDER BY name'
+      'SELECT id, name FROM system_departments ORDER BY name'
     );
     res.json(departments);
   } catch (error) {
@@ -83,7 +81,7 @@ export const handleGetApplicationStatuses: RequestHandler = async (_req, res) =>
 export const handleGetSkills: RequestHandler = async (req, res) => {
   try {
     const { search, approved } = req.query;
-    let query = 'SELECT id, name, is_approved FROM skills';
+    let query = 'SELECT id, name, is_approved FROM system_skills';
     const params: any[] = [];
     const conditions: string[] = [];
 
@@ -111,69 +109,45 @@ export const handleGetSkills: RequestHandler = async (req, res) => {
   }
 };
 
-// Get industries
+// Get industries (not in new schema, return empty array)
 export const handleGetIndustries: RequestHandler = async (_req, res) => {
   try {
-    const industries = await executeQuery<any>(
-      'SELECT id, name FROM industries ORDER BY name'
-    );
-    res.json(industries);
+    // Industries table doesn't exist in new schema, return empty array
+    res.json([]);
   } catch (error) {
     console.error('Error fetching industries:', error);
     res.status(500).json({ message: 'Failed to fetch industries' });
   }
 };
 
-// Get countries
+// Get countries (not in new schema, return empty array)
 export const handleGetCountries: RequestHandler = async (_req, res) => {
   try {
-    const countries = await executeQuery<any>(
-      'SELECT id, name FROM countries ORDER BY name'
-    );
-    res.json(countries);
+    // Countries table doesn't exist in new schema, return empty array
+    res.json([]);
   } catch (error) {
     console.error('Error fetching countries:', error);
     res.status(500).json({ message: 'Failed to fetch countries' });
   }
 };
 
-// Get cities by country
-export const handleGetCities: RequestHandler = async (req, res) => {
+// Get cities by country (not in new schema, return empty array)
+export const handleGetCities: RequestHandler = async (_req, res) => {
   try {
-    const { country_id } = req.query;
-    let query = 'SELECT id, country_id, name FROM cities';
-    const params: any[] = [];
-
-    if (country_id) {
-      query += ' WHERE country_id = ?';
-      params.push(parseInt(country_id as string));
-    }
-
-    query += ' ORDER BY name';
-
-    const cities = await executeQuery<any>(query, params);
-    res.json(cities);
+    // Cities table doesn't exist in new schema, return empty array
+    res.json([]);
   } catch (error) {
     console.error('Error fetching cities:', error);
     res.status(500).json({ message: 'Failed to fetch cities' });
   }
 };
 
-// Get areas by city
-export const handleGetAreas: RequestHandler = async (req, res) => {
+// Get areas (simplified for new schema)
+export const handleGetAreas: RequestHandler = async (_req, res) => {
   try {
-    const { city_id } = req.query;
-    let query = 'SELECT id, city_id, name FROM areas';
-    const params: any[] = [];
-
-    if (city_id) {
-      query += ' WHERE city_id = ?';
-      params.push(parseInt(city_id as string));
-    }
-
-    query += ' ORDER BY name';
-
-    const areas = await executeQuery<any>(query, params);
+    const areas = await executeQuery<any>(
+      'SELECT id, name FROM system_areas ORDER BY name'
+    );
     res.json(areas);
   } catch (error) {
     console.error('Error fetching areas:', error);
@@ -192,7 +166,7 @@ export const handleCreateSkill: RequestHandler = async (req, res) => {
 
     // Check if skill already exists
     const existingSkill = await executeQuery<any>(
-      'SELECT id FROM skills WHERE name = ?',
+      'SELECT id FROM system_skills WHERE name = ?',
       [name.trim()]
     );
 
@@ -202,12 +176,12 @@ export const handleCreateSkill: RequestHandler = async (req, res) => {
 
     // Insert new skill as pending approval
     const result = await executeSingleQuery(
-      'INSERT INTO skills (name, is_approved) VALUES (?, FALSE)',
+      'INSERT INTO system_skills (name, is_approved) VALUES (?, FALSE)',
       [name.trim()]
     );
 
     const newSkill = await executeQuery<any>(
-      'SELECT id, name, is_approved FROM skills WHERE id = ?',
+      'SELECT id, name, is_approved FROM system_skills WHERE id = ?',
       [result.insertId]
     );
 

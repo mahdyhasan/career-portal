@@ -7,13 +7,21 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { jobsApi } from '@/services/api';
 import { Job } from '@shared/api';
+
+// Extended interface for jobs with joined fields from API
+interface JobWithDetails extends Job {
+  department_name?: string;
+  job_type_name?: string;
+  experience_level_name?: string;
+  status_name?: string;
+}
 import { MapPin, DollarSign, Briefcase, ArrowLeft, Loader2, Users, Settings, Eye } from 'lucide-react';
 
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, isCandidate, isAdmin, isSuperAdmin } = useAuth();
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJob] = useState<JobWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,8 +105,34 @@ export default function JobDetails() {
     navigate(`/admin/jobs/${job.id}/edit`);
   };
 
+  const handleDeleteJob = async () => {
+    if (!confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await jobsApi.deleteJob(job.id);
+      navigate('/admin/jobs');
+    } catch (error) {
+      console.error('Failed to delete job:', error);
+      alert('Failed to delete job. Please try again.');
+    }
+  };
+
   const handleManageJob = () => {
     navigate(`/admin/jobs`);
+  };
+
+  // Check if user can edit this job (owner or SuperAdmin)
+  const canEditJob = () => {
+    if (!isAuthenticated) return false;
+    if (isSuperAdmin) return true;
+    return false; // Simplified for new schema - only SuperAdmin can edit
+  };
+
+  // Check if user can delete this job (only SuperAdmin)
+  const canDeleteJob = () => {
+    return isSuperAdmin;
   };
 
   return (
@@ -122,11 +156,11 @@ export default function JobDetails() {
                   {job.title}
                 </h1>
                 <p className="text-xl text-muted-foreground">
-                  {job.company?.name}
+                  {job.department_name}
                 </p>
               </div>
               <Badge className="px-4 py-2 text-base">
-                {job.job_type?.name === 'Full-time' ? 'Full-time' : job.job_type?.name === 'Part-time' ? 'Part-time' : job.job_type?.name === 'Contract' ? 'Contract' : 'Internship'}
+                {job.job_type_name || 'Job'}
               </Badge>
             </div>
 
@@ -135,18 +169,18 @@ export default function JobDetails() {
               <div>
                 <div className="flex items-center gap-3 text-muted-foreground mb-1">
                   <MapPin size={20} />
-                  <span className="text-sm">Location</span>
+                  <span className="text-sm">Department</span>
                 </div>
-                <p className="text-foreground font-medium ml-8">{job.location_text}</p>
+                <p className="text-foreground font-medium ml-8">{job.department_name}</p>
               </div>
 
-              {job.salary_range && (
+              {job.salary_min && (
                 <div>
                   <div className="flex items-center gap-3 text-muted-foreground mb-1">
                     <DollarSign size={20} />
                     <span className="text-sm">Salary Range</span>
                   </div>
-                  <p className="text-foreground font-medium ml-8">{job.salary_range}</p>
+                  <p className="text-foreground font-medium ml-8">{job.salary_min} - {job.salary_max}</p>
                 </div>
               )}
 
@@ -196,15 +230,27 @@ export default function JobDetails() {
                     <Users size={20} className="mr-2" />
                     View Applications
                   </Button>
-                  <Button
-                    onClick={handleEditJob}
-                    variant="outline"
-                    size="lg"
-                    className="flex-1"
-                  >
-                    <Settings size={20} className="mr-2" />
-                    Edit Job
-                  </Button>
+                  {canEditJob() && (
+                    <Button
+                      onClick={handleEditJob}
+                      variant="outline"
+                      size="lg"
+                      className="flex-1"
+                    >
+                      <Settings size={20} className="mr-2" />
+                      Edit Job
+                    </Button>
+                  )}
+                  {canDeleteJob() && (
+                    <Button
+                      onClick={handleDeleteJob}
+                      variant="destructive"
+                      size="lg"
+                      className="flex-1"
+                    >
+                      Delete Job
+                    </Button>
+                  )}
                   <Button
                     onClick={handleManageJob}
                     variant="outline"
@@ -236,18 +282,18 @@ export default function JobDetails() {
                   About the Role
                 </h2>
                 <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {job.description}
+                  {job.summary}
                 </p>
               </section>
 
               {/* Key Responsibilities */}
-              {job.key_responsibilities && (
+              {job.responsibilities && (
                 <section className="bg-white border border-border rounded-xl p-8 mb-8">
                   <h2 className="text-2xl font-bold text-foreground mb-4">
                     Key Responsibilities
                   </h2>
                   <p className="text-muted-foreground whitespace-pre-line">
-                    {job.key_responsibilities}
+                    {job.responsibilities}
                   </p>
                 </section>
               )}
@@ -289,20 +335,18 @@ export default function JobDetails() {
                     You'll need to provide the following information:
                   </p>
                   <ul className="space-y-2">
-                    {job.form_fields
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map((field) => (
-                        <li
-                          key={field.id}
-                          className="flex items-center gap-2 text-sm text-foreground"
-                        >
-                          <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-                          {field.label}
-                          {field.is_required && (
-                            <span className="text-destructive font-bold">*</span>
-                          )}
-                        </li>
-                      ))}
+                    {job.form_fields?.map((field) => (
+                      <li
+                        key={field.id}
+                        className="flex items-center gap-2 text-sm text-foreground"
+                      >
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+                        {field.label}
+                        {field.is_required && (
+                          <span className="text-destructive font-bold">*</span>
+                        )}
+                      </li>
+                    ))}
                   </ul>
                   {isCandidate && (
                     <Button

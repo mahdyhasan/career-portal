@@ -30,6 +30,14 @@ import {
   handleExportData 
 } from "./routes/admin";
 import { 
+  handleGetUsers as handleGetAllUsers,
+  handleGetUser,
+  handleCreateUser as handleCreateNewUser,
+  handleUpdateUserStatus as handleUpdateUserStatusRoute,
+  handleUpdateUserRole as handleUpdateUserRoleRoute,
+  handleDeleteUser
+} from "./routes/users";
+import { 
   handleGetProfile, 
   handleUpdateProfile, 
   handleUploadFile,
@@ -51,6 +59,7 @@ import {
   handleWithdrawApplication
 } from "./routes/applications";
 import { authenticateToken, optionalAuth, requireRole } from "./middleware/auth";
+import { requireJobManagement } from "./middleware/checkRole";
 import { testConnection } from "./config/database";
 
 export function createServer() {
@@ -90,9 +99,9 @@ export function createServer() {
   // Job routes
   app.get("/api/jobs", handleGetJobs);
   app.get("/api/jobs/:id", handleGetJob);
-  app.post("/api/jobs", authenticateToken, requireRole(['SuperAdmin', 'HiringManager']), handleCreateJob);
+  app.post("/api/jobs", authenticateToken, requireJobManagement, handleCreateJob);
   app.put("/api/jobs/:id", authenticateToken, handleUpdateJob);
-  app.delete("/api/jobs/:id", authenticateToken, handleDeleteJob);
+  app.delete("/api/jobs/:id", authenticateToken, requireRole(['SuperAdmin']), handleDeleteJob);
   app.get("/api/jobs/stats", authenticateToken, handleGetJobStats);
 
   // Candidate routes
@@ -129,6 +138,14 @@ export function createServer() {
   app.get("/api/lookup/cities", handleGetCities);
   app.get("/api/lookup/areas", handleGetAreas);
   app.post("/api/lookup/skills", authenticateToken, handleCreateSkill);
+
+  // User Management routes (SuperAdmin only)
+  app.get("/api/users", authenticateToken, requireRole(['SuperAdmin']), handleGetAllUsers);
+  app.get("/api/users/:id", authenticateToken, requireRole(['SuperAdmin']), handleGetUser);
+  app.post("/api/users", authenticateToken, requireRole(['SuperAdmin']), handleCreateNewUser);
+  app.put("/api/users/:id/status", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserStatusRoute);
+  app.put("/api/users/:id/role", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserRoleRoute);
+  app.delete("/api/users/:id", authenticateToken, requireRole(['SuperAdmin']), handleDeleteUser);
 
   // Super Admin routes
   app.get("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleGetUsers);

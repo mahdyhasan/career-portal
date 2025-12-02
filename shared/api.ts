@@ -30,23 +30,6 @@ export interface ApplicationStatus {
   name: string;
 }
 
-export interface ReferralSource {
-  id: number;
-  name: string;
-}
-
-export interface AchievementType {
-  id: number;
-  name: string;
-}
-
-export interface Company {
-  id: number;
-  name: string;
-  website?: string;
-  logo_url?: string;
-}
-
 export interface Department {
   id: number;
   name: string;
@@ -57,7 +40,35 @@ export interface ExperienceLevel {
   name: string;
 }
 
+export interface SystemArea {
+  id: number;
+  name: string;
+}
+
+export interface SystemSkill {
+  id: number;
+  name: string;
+  is_approved: boolean;
+}
+
+export interface Company {
+  id: number;
+  name: string;
+  website?: string;
+  logo_url?: string;
+}
+
 export interface InputType {
+  id: number;
+  name: string;
+}
+
+export interface AchievementType {
+  id: number;
+  name: string;
+}
+
+export interface ReferralSource {
   id: number;
   name: string;
 }
@@ -79,7 +90,6 @@ export interface City {
 
 export interface Area {
   id: number;
-  city_id: number;
   name: string;
 }
 
@@ -107,27 +117,22 @@ export interface User {
 export interface CandidateProfile {
   id: number;
   user_id: number;
-  first_name?: string;
-  last_name?: string;
+  full_name?: string;
   phone?: string;
-  bio?: string;
   earliest_join_date?: string;
-  country_id?: number;
-  city_id?: number;
   area_id?: number;
   linkedin_url?: string;
   github_url?: string;
   portfolio_url?: string;
-  blog_url?: string;
+  exp_salary_min?: string;
+  exp_salary_max?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
   
   // Joined relationships
   user?: User;
-  country?: Country;
-  city?: City;
-  area?: Area;
+  area?: SystemArea;
   skills?: CandidateSkill[];
   education?: CandidateEducation[];
   achievements?: CandidateAchievement[];
@@ -139,30 +144,24 @@ export interface CandidateProfile {
 // ==========================================
 
 export interface Job {
-  isActive: unknown;
   id: number;
   title: string;
-  created_by_user_id: number;
-  hiring_manager_id: number;
-  company_id: number;
   department_id: number;
   experience_level_id: number;
   job_type_id: number;
   status_id: number;
-  description: string;
-  key_responsibilities?: string;
+  summary: string;
+  responsibilities?: string;
   requirements?: string;
   benefits?: string;
-  salary_range?: string;
-  location_text?: string;
+  salary_min?: string;
+  salary_max?: string;
+  deadline?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
   
   // Joined relationships
-  created_by?: User;
-  hiring_manager?: User;
-  company?: Company;
   department?: Department;
   experience_level?: ExperienceLevel;
   job_type?: JobType;
@@ -171,21 +170,11 @@ export interface Job {
 }
 
 export interface JobFormField {
-  order: any;
-  type: string;
-  placeholder: string;
-  required: boolean;
   id: number;
   job_id: number;
-  input_type_id: number;
+  input_type: 'checkbox' | 'number' | 'text' | 'textarea';
   label: string;
-  name: string;
   is_required: boolean;
-  sort_order: number;
-  
-  // Joined relationships
-  input_type?: InputType;
-  options?: JobFormFieldOption[];
 }
 
 export interface JobFormFieldOption {
@@ -253,26 +242,24 @@ export interface CandidateAttachment {
 // ==========================================
 
 export interface Application {
-  jobId: number;
-  candidateName: ReactNode;
-  candidateEmail: ReactNode;
   id: number;
   job_id: number;
   candidate_user_id: number;
   status_id: number;
-  referral_source_id?: number;
+  source: 'Direct' | 'Linkedin' | 'Facebook' | 'Referral';
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+  
+  // Computed properties for UI
+  candidateName?: string;
+  candidateEmail?: string;
   
   // Joined relationships
   job?: Job;
   candidate?: User;
   status?: ApplicationStatus;
-  referral_source?: ReferralSource;
   answers?: ApplicationAnswer[];
-  history?: ApplicationHistory[];
-  feedback?: ApplicationUXFeedback;
 }
 
 export interface ApplicationAnswer {
@@ -334,18 +321,15 @@ export interface SignupRequest {
 
 // Profile Management
 export interface CandidateProfileUpdateRequest {
-  first_name?: string;
-  last_name?: string;
+  full_name?: string;
   phone?: string;
-  bio?: string;
   earliest_join_date?: string;
-  country_id?: number;
-  city_id?: number;
   area_id?: number;
   linkedin_url?: string;
   github_url?: string;
   portfolio_url?: string;
-  blog_url?: string;
+  exp_salary_min?: string;
+  exp_salary_max?: string;
 }
 
 export interface CandidateEducationRequest {
@@ -388,24 +372,27 @@ export interface JobFormFieldRequest {
 
 export interface CreateJobRequest {
   title: string;
-  company_id: number;
   department_id: number;
   experience_level_id: number;
   job_type_id: number;
-  description: string;
-  key_responsibilities?: string;
+  summary: string;
+  responsibilities?: string;
   requirements?: string;
   benefits?: string;
-  salary_range?: string;
-  location_text?: string;
-  hiring_manager_id?: number;
-  form_fields?: JobFormFieldRequest[];
+  salary_min?: string;
+  salary_max?: string;
+  deadline?: string;
+  form_fields?: Array<{
+    input_type: 'checkbox' | 'number' | 'text' | 'textarea';
+    label: string;
+    is_required: boolean;
+  }>;
 }
 
 // Application
 export interface SubmitApplicationRequest {
   job_id: number;
-  referral_source_id?: number;
+  source: 'Direct' | 'Linkedin' | 'Facebook' | 'Referral';
   answers: Array<{
     job_form_field_id: number;
     answer_text?: string;
@@ -480,9 +467,13 @@ export interface JobsListResponse {
 }
 
 export interface ApplicationsListResponse {
-  data(data: any): unknown;
   applications: Application[];
-  total: number;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export interface CandidatesListResponse {

@@ -1,582 +1,596 @@
--- Updated Career Portal Database Schema
--- MySQL 8.0+ compatible with enhancements
+-- Career Portal Database Schema
+-- Based on current database structure
+-- Generated: December 2, 2025
 
--- Create database if it doesn't exist
-CREATE DATABASE IF NOT EXISTS augmex_career CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE augmex_career;
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
--- ==========================================
--- 1. LOOKUP TABLES
--- ==========================================
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
 
--- Roles table
-CREATE TABLE roles (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name ENUM('SuperAdmin', 'HiringManager', 'Candidate') NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+--
+-- Database: `augmex_career`
+--
 
--- Job Statuses
-CREATE TABLE job_statuses (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+-- --------------------------------------------------------
 
--- Job Types
-CREATE TABLE job_types (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+--
+-- Table structure for table `applications`
+--
 
--- Application Statuses
-CREATE TABLE application_statuses (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+CREATE TABLE `applications` (
+  `id` int NOT NULL,
+  `job_id` int NOT NULL,
+  `candidate_user_id` int NOT NULL,
+  `status_id` int NOT NULL,
+  `source` enum('Direct','Linkedin','Facebook','Referral') COLLATE utf8mb4_general_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Referral Sources
-CREATE TABLE referral_sources (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+-- --------------------------------------------------------
 
--- Achievement Types
-CREATE TABLE achievement_types (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+--
+-- Table structure for table `application_answers`
+--
 
--- Input Types (for dynamic form fields)
-CREATE TABLE input_types (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name ENUM('text', 'textarea', 'number', 'select', 'checkbox', 'file') NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+CREATE TABLE `application_answers` (
+  `id` int NOT NULL,
+  `application_id` int NOT NULL,
+  `job_form_field_id` int NOT NULL,
+  `answer_text` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Companies
-CREATE TABLE companies (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  website VARCHAR(500),
-  logo_url VARCHAR(500),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+-- --------------------------------------------------------
 
--- Departments
-CREATE TABLE departments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+--
+-- Table structure for table `application_statuses`
+--
 
--- Experience Levels
-CREATE TABLE experience_levels (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+CREATE TABLE `application_statuses` (
+  `id` int NOT NULL,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- ==========================================
--- 2. LOCATION TABLES
--- ==========================================
+--
+-- Dumping data for table `application_statuses`
+--
 
--- Countries
-CREATE TABLE countries (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+INSERT INTO `application_statuses` (`id`, `name`) VALUES
+(1, 'Applied'),
+(3, 'Interview'),
+(4, 'Offer'),
+(5, 'Rejected'),
+(2, 'Screening'),
+(6, 'Withdrawn');
 
--- Cities
-CREATE TABLE cities (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  country_id INT NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+-- --------------------------------------------------------
 
--- Areas
-CREATE TABLE areas (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  city_id INT NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+--
+-- Table structure for table `candidate_achievements`
+--
 
--- ==========================================
--- 2.5. OTP VERIFICATION TABLE
--- ==========================================
+CREATE TABLE `candidate_achievements` (
+  `id` int NOT NULL,
+  `candidate_profile_id` int NOT NULL,
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `url` varchar(2083) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- OTP Codes for email verification
-CREATE TABLE otp_codes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(255) NOT NULL,
-  otp VARCHAR(6) NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_email_otp (email, otp)
-);
+-- --------------------------------------------------------
 
--- ==========================================
--- 3. CORE USER & PROFILE TABLES
--- ==========================================
+--
+-- Table structure for table `candidate_attachments`
+--
 
--- Users table
-CREATE TABLE users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(255) NOT NULL UNIQUE,
-  password_hash VARCHAR(255),
-  role_id INT NOT NULL,
-  google_id VARCHAR(255),
-  linkedin_id VARCHAR(255),
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at TIMESTAMP NULL,
-  FOREIGN KEY (role_id) REFERENCES roles(id)
-);
+CREATE TABLE `candidate_attachments` (
+  `id` int NOT NULL,
+  `candidate_profile_id` int NOT NULL,
+  `file_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT 'resume, cover_letter, portfolio',
+  `file_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `uploaded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Candidate Profiles
-CREATE TABLE candidate_profiles (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL UNIQUE,
-  first_name VARCHAR(255),
-  last_name VARCHAR(255),
-  phone VARCHAR(50),
-  headline VARCHAR(255) COMMENT 'Professional headline for search',
-  bio TEXT,
-  earliest_join_date DATE,
-  country_id INT,
-  city_id INT,
-  area_id INT,
-  linkedin_url VARCHAR(500),
-  github_url VARCHAR(500),
-  portfolio_url VARCHAR(500),
-  blog_url VARCHAR(500),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at TIMESTAMP NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (country_id) REFERENCES countries(id),
-  FOREIGN KEY (city_id) REFERENCES cities(id),
-  FOREIGN KEY (area_id) REFERENCES areas(id)
-);
+-- --------------------------------------------------------
 
--- ==========================================
--- 4. SKILLS, EDUCATION, FILES (Candidate Data)
--- ==========================================
+--
+-- Table structure for table `candidate_educations`
+--
 
--- Skills
-CREATE TABLE skills (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL UNIQUE,
-  is_approved BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+CREATE TABLE `candidate_educations` (
+  `id` int NOT NULL,
+  `candidate_profile_id` int NOT NULL,
+  `institute_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `degree` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `major_subject` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `graduation_year` int DEFAULT NULL,
+  `result` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Candidate Skills (junction table)
-CREATE TABLE candidate_skills (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  candidate_profile_id INT NOT NULL,
-  skill_id INT NOT NULL,
-  FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles(id) ON DELETE CASCADE,
-  FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE,
-  UNIQUE KEY unique_candidate_skill (candidate_profile_id, skill_id)
-);
+-- --------------------------------------------------------
 
--- Candidate Education
-CREATE TABLE candidate_education (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  candidate_profile_id INT NOT NULL,
-  institute_name VARCHAR(255) NOT NULL,
-  degree VARCHAR(255) NOT NULL,
-  major_subject VARCHAR(255),
-  graduation_year INT,
-  result VARCHAR(100),
-  FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles(id) ON DELETE CASCADE
-);
+--
+-- Table structure for table `candidate_profiles`
+--
 
--- Candidate Achievements
-CREATE TABLE candidate_achievements (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  candidate_profile_id INT NOT NULL,
-  achievement_type_id INT NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  description TEXT,
-  issue_date DATE,
-  url VARCHAR(500),
-  FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles(id) ON DELETE CASCADE,
-  FOREIGN KEY (achievement_type_id) REFERENCES achievement_types(id)
-);
+CREATE TABLE `candidate_profiles` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `full_name` varchar(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `phone` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `earliest_join_date` date DEFAULT NULL,
+  `area_id` int DEFAULT NULL,
+  `linkedin_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `github_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `portfolio_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `exp_salary_min` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `exp_salary_max` varchar(100) COLLATE utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Candidate Attachments (CV, Portfolio, etc.)
-CREATE TABLE candidate_attachments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  candidate_profile_id INT NOT NULL,
-  file_type ENUM('resume', 'cover_letter', 'portfolio', 'photo', 'other') NOT NULL,
-  file_url VARCHAR(500) NOT NULL,
-  file_size_kb INT NOT NULL,
-  mime_type VARCHAR(100),
-  parsed_text TEXT COMMENT 'Extracted text for full-text search',
-  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (candidate_profile_id) REFERENCES candidate_profiles(id) ON DELETE CASCADE
-);
+-- --------------------------------------------------------
 
--- ==========================================
--- 5. JOBS & FORM BUILDER TABLES
--- ==========================================
+--
+-- Table structure for table `candidate_skills`
+--
 
--- Jobs
-CREATE TABLE jobs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  created_by_user_id INT NOT NULL,
-  hiring_manager_id INT NOT NULL,
-  company_id INT NOT NULL,
-  department_id INT NOT NULL,
-  experience_level_id INT NOT NULL,
-  job_type_id INT NOT NULL,
-  status_id INT NOT NULL DEFAULT 1,
-  description TEXT NOT NULL,
-  key_responsibilities TEXT,
-  requirements TEXT,
-  benefits TEXT,
-  salary_range VARCHAR(255),
-  location_text VARCHAR(255),
-  auto_reject_days INT NULL COMMENT 'If applied > X days ago and still in Screen, auto reject',
-  auto_remind_hours INT NULL COMMENT 'Remind interviewer X hours before interview',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at TIMESTAMP NULL,
-  FOREIGN KEY (created_by_user_id) REFERENCES users(id),
-  FOREIGN KEY (hiring_manager_id) REFERENCES users(id),
-  FOREIGN KEY (company_id) REFERENCES companies(id),
-  FOREIGN KEY (department_id) REFERENCES departments(id),
-  FOREIGN KEY (experience_level_id) REFERENCES experience_levels(id),
-  FOREIGN KEY (job_type_id) REFERENCES job_types(id),
-  FOREIGN KEY (status_id) REFERENCES job_statuses(id)
-);
+CREATE TABLE `candidate_skills` (
+  `candidate_profile_id` int NOT NULL,
+  `skill_id` int NOT NULL,
+  `proficiency` enum('beginner','intermediate','advanced','expert') COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `years_experience` decimal(3,1) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Job Form Fields (dynamic form builder)
-CREATE TABLE job_form_fields (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  job_id INT NOT NULL,
-  input_type_id INT NOT NULL,
-  label VARCHAR(255) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  is_required BOOLEAN DEFAULT FALSE,
-  sort_order INT DEFAULT 0,
-  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-  FOREIGN KEY (input_type_id) REFERENCES input_types(id)
-);
+-- --------------------------------------------------------
 
--- Job Form Field Options (for select/checkbox fields)
-CREATE TABLE job_form_field_options (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  job_form_field_id INT NOT NULL,
-  option_label VARCHAR(255) NOT NULL,
-  option_value VARCHAR(255) NOT NULL,
-  sort_order INT DEFAULT 0,
-  FOREIGN KEY (job_form_field_id) REFERENCES job_form_fields(id) ON DELETE CASCADE
-);
+--
+-- Table structure for table `job_experience_levels`
+--
 
--- ==========================================
--- 6. APPLICATIONS & HISTORY TABLES
--- ==========================================
+CREATE TABLE `job_experience_levels` (
+  `id` int NOT NULL,
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Applications
-CREATE TABLE applications (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  job_id INT NOT NULL,
-  candidate_user_id INT NOT NULL,
-  status_id INT NOT NULL,
-  referral_source_id INT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at TIMESTAMP NULL,
-  FOREIGN KEY (job_id) REFERENCES jobs(id),
-  FOREIGN KEY (candidate_user_id) REFERENCES users(id),
-  FOREIGN KEY (status_id) REFERENCES application_statuses(id),
-  FOREIGN KEY (referral_source_id) REFERENCES referral_sources(id),
-  UNIQUE KEY unique_job_candidate (job_id, candidate_user_id)
-);
+--
+-- Dumping data for table `job_experience_levels`
+--
 
--- Application Answers (form field responses)
-CREATE TABLE application_answers (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  application_id INT NOT NULL,
-  job_form_field_id INT NOT NULL,
-  answer_text TEXT,
-  FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
-  FOREIGN KEY (job_form_field_id) REFERENCES job_form_fields(id)
-);
+INSERT INTO `job_experience_levels` (`id`, `name`) VALUES
+(1, 'Intern'),
+(2, 'Junior (1-2 Years)'),
+(5, 'Lead/Architect'),
+(3, 'Mid-Level (3-5 Years)'),
+(4, 'Senior (5+ Years)');
 
--- Application Activities (renamed from application_history for clarity)
-CREATE TABLE application_activities (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  application_id INT NOT NULL,
-  activity_type ENUM('status_change', 'comment', 'note', 'email_sent', 'interview_log', 'system_event') NOT NULL DEFAULT 'status_change',
-  previous_status_id INT,
-  new_status_id INT COMMENT 'Nullable because a comment doesnt change status',
-  changed_by_user_id INT NOT NULL,
-  notes TEXT,
-  is_internal BOOLEAN DEFAULT TRUE COMMENT '0 = Visible to candidate, 1 = Team only',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
-  FOREIGN KEY (previous_status_id) REFERENCES application_statuses(id),
-  FOREIGN KEY (new_status_id) REFERENCES application_statuses(id),
-  FOREIGN KEY (changed_by_user_id) REFERENCES users(id)
-);
+-- --------------------------------------------------------
 
--- Application UX Feedback (1-5 rating + comment)
-CREATE TABLE application_ux_feedback (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  application_id INT NOT NULL UNIQUE,
-  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-  comment TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
-);
+--
+-- Table structure for table `job_form_fields`
+--
 
--- ==========================================
--- 7. NEW ENHANCED FEATURES TABLES
--- ==========================================
+CREATE TABLE `job_form_fields` (
+  `id` int NOT NULL,
+  `job_id` int NOT NULL,
+  `input_type` enum('checkbox','number','text','textarea') COLLATE utf8mb4_general_ci NOT NULL,
+  `label` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `is_required` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Tags (for polymorphic tagging system)
-CREATE TABLE tags (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  color_hex VARCHAR(7) DEFAULT '#6B7280',
-  type ENUM('job', 'candidate', 'general') DEFAULT 'general',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+--
+-- Dumping data for table `job_form_fields`
+--
 
--- Taggables (polymorphic relationship for tags)
-CREATE TABLE taggables (
-  tag_id BIGINT UNSIGNED NOT NULL,
-  taggable_id BIGINT UNSIGNED NOT NULL,
-  taggable_type VARCHAR(255) NOT NULL COMMENT 'App\\Models\\Job or App\\Models\\CandidateProfile',
-  PRIMARY KEY (tag_id, taggable_id, taggable_type),
-  KEY taggables_index (taggable_type, taggable_id),
-  FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-);
+INSERT INTO `job_form_fields` (`id`, `job_id`, `input_type`, `label`, `is_required`) VALUES
+(13, 7, 'number', 'How do you ensure the work culture at your worlplace?', 1),
+(14, 7, 'text', 'Ho many years of experince do you have working with Node.js?', 1);
 
--- Offer Templates (for standardized offer communications)
-CREATE TABLE offer_templates (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL COMMENT 'e.g. Standard Engineering Offer',
-  subject VARCHAR(255) NOT NULL,
-  body LONGTEXT NOT NULL COMMENT 'HTML content with placeholders like {{candidate_name}}, {{salary}}',
-  created_by INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (created_by) REFERENCES users(id)
-);
+-- --------------------------------------------------------
 
--- Audit Logs (for security and compliance)
-CREATE TABLE audit_logs (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NULL COMMENT 'Null if system action',
-  event VARCHAR(255) NOT NULL COMMENT 'created, updated, deleted',
-  auditable_type VARCHAR(255) NOT NULL,
-  auditable_id BIGINT UNSIGNED NOT NULL,
-  old_values JSON NULL,
-  new_values JSON NULL,
-  ip_address VARCHAR(45),
-  user_agent VARCHAR(255),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+--
+-- Table structure for table `job_posts`
+--
 
--- Notifications (for system-wide notifications)
-CREATE TABLE notifications (
-  id CHAR(36) NOT NULL PRIMARY KEY,
-  type VARCHAR(255) NOT NULL,
-  notifiable_type VARCHAR(255) NOT NULL,
-  notifiable_id BIGINT UNSIGNED NOT NULL,
-  data TEXT NOT NULL,
-  read_at TIMESTAMP NULL,
-  created_at TIMESTAMP NULL,
-  updated_at TIMESTAMP NULL
-);
+CREATE TABLE `job_posts` (
+  `id` int NOT NULL,
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `department_id` int NOT NULL,
+  `experience_level_id` int NOT NULL,
+  `job_type_id` int NOT NULL,
+  `status_id` int NOT NULL,
+  `summary` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `responsibilities` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `requirements` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `benefits` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  `salary_min` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `salary_max` varchar(100) COLLATE utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `deadline` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- ==========================================
--- 8. INDEXES FOR PERFORMANCE
--- ==========================================
+--
+-- Dumping data for table `job_posts`
+--
 
--- Users indexes
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role_id);
-CREATE INDEX idx_users_active ON users(is_active, deleted_at);
+INSERT INTO `job_posts` (`id`, `title`, `department_id`, `experience_level_id`, `job_type_id`, `status_id`, `summary`, `responsibilities`, `requirements`, `benefits`, `salary_min`, `salary_max`, `deadline`, `created_at`, `updated_at`, `deleted_at`) VALUES
+(7, 'asdasdasdsadas', 2, 5, 1, 1, 'asdasdas\ndas\nd\nsadasdasdasdas asdasdasd asd asd', 'sdfd as\ndfsad fa\nsd\nf\nsd\nf\ns d\nf\nds', 'sd\nfsd\nf\nds\nf\nd\nfd\nf', 'ef\nsd\nf\nsd\nf\ndf\ndf', '$10000 - $120000', NULL, NULL, '2025-12-01 16:00:45', '2025-12-01 16:00:45', NULL);
 
--- Jobs indexes
-CREATE INDEX idx_jobs_status ON jobs(status_id, deleted_at);
-CREATE INDEX idx_jobs_company ON jobs(company_id);
-CREATE INDEX idx_jobs_type ON jobs(job_type_id);
-CREATE INDEX idx_jobs_experience ON jobs(experience_level_id);
-CREATE INDEX idx_jobs_created ON jobs(created_at);
+-- --------------------------------------------------------
 
--- Applications indexes
-CREATE INDEX idx_applications_job ON applications(job_id, status_id);
-CREATE INDEX idx_applications_candidate ON applications(candidate_user_id);
-CREATE INDEX idx_applications_created ON applications(created_at);
+--
+-- Table structure for table `job_statuses`
+--
 
--- Candidate profiles indexes
-CREATE INDEX idx_candidate_profile_user ON candidate_profiles(user_id);
-CREATE INDEX idx_candidate_profile_location ON candidate_profiles(country_id, city_id, area_id);
+CREATE TABLE `job_statuses` (
+  `id` int NOT NULL,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Full-text search indexes for MySQL 8
-CREATE FULLTEXT INDEX idx_jobs_search ON jobs(title, description);
-CREATE FULLTEXT INDEX idx_profiles_search ON candidate_profiles(headline, bio);
-CREATE FULLTEXT INDEX idx_resume_search ON candidate_attachments(parsed_text);
+--
+-- Dumping data for table `job_statuses`
+--
 
--- ==========================================
--- 9. INSERT DEFAULT DATA
--- ==========================================
+INSERT INTO `job_statuses` (`id`, `name`) VALUES
+(3, 'Closed'),
+(1, 'Draft'),
+(2, 'Published');
 
--- Insert default roles
-INSERT INTO roles (name) VALUES 
-('SuperAdmin'),
-('HiringManager'),
-('Candidate');
+-- --------------------------------------------------------
 
--- Insert default job statuses
-INSERT INTO job_statuses (name) VALUES 
-('Draft'),
-('Published'),
-('Closed'),
-('Paused');
+--
+-- Table structure for table `job_types`
+--
 
--- Insert default job types
-INSERT INTO job_types (name) VALUES 
-('Full-time'),
-('Part-time'),
-('Contract'),
-('Internship'),
-('Remote');
+CREATE TABLE `job_types` (
+  `id` int NOT NULL,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Insert default application statuses
-INSERT INTO application_statuses (name) VALUES 
-('Applied'),
-('Under Review'),
-('Screening'),
-('Interview'),
-('Technical Assessment'),
-('Offer'),
-('Rejected'),
-('Withdrawn');
+--
+-- Dumping data for table `job_types`
+--
 
--- Insert default referral sources
-INSERT INTO referral_sources (name) VALUES 
-('LinkedIn'),
-('Indeed'),
-('Company Website'),
-('Referral'),
-('Social Media'),
-('Job Board'),
-('Other');
+INSERT INTO `job_types` (`id`, `name`) VALUES
+(3, 'Contract'),
+(1, 'Full-time'),
+(2, 'Part-time'),
+(4, 'Remote');
 
--- Insert default achievement types
-INSERT INTO achievement_types (name) VALUES 
-('Certification'),
-('Award'),
-('Publication'),
-('Patent'),
-('Conference'),
-('Workshop'),
-('Other');
+-- --------------------------------------------------------
 
--- Insert default input types
-INSERT INTO input_types (name) VALUES 
-('text'),
-('textarea'),
-('number'),
-('select'),
-('checkbox'),
-('file');
+--
+-- Table structure for table `roles`
+--
 
--- Insert default companies
-INSERT INTO companies (name, website) VALUES 
-('Augmex', 'https://augmex.com'),
-('Tech Corp', 'https://techcorp.com'),
-('StartupXYZ', 'https://startupxyz.com');
+CREATE TABLE `roles` (
+  `id` int NOT NULL,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Insert default departments
-INSERT INTO departments (name) VALUES 
-('Engineering'),
-('Marketing'),
-('Sales'),
-('HR'),
-('Finance'),
-('Operations');
+--
+-- Dumping data for table `roles`
+--
 
--- Insert default experience levels
-INSERT INTO experience_levels (name) VALUES 
-('Entry Level'),
-('Mid Level'),
-('Senior Level'),
-('Lead/Manager'),
-('Director/VP');
+INSERT INTO `roles` (`id`, `name`) VALUES
+(3, 'Candidate'),
+(2, 'HiringManager'),
+(1, 'SuperAdmin');
 
--- Insert default countries
-INSERT INTO countries (name) VALUES 
-('United States'),
-('United Kingdom'),
-('Canada'),
-('Australia'),
-('Germany'),
-('Bangladesh'),
-('India');
+-- --------------------------------------------------------
 
--- Insert default cities (example)
-INSERT INTO cities (country_id, name) VALUES 
-(1, 'New York'),
-(1, 'San Francisco'),
-(1, 'Austin'),
-(7, 'Dhaka'),
-(7, 'Chittagong'),
-(8, 'Bangalore'),
-(8, 'Mumbai');
+--
+-- Table structure for table `system_areas`
+--
 
--- Insert default skills
-INSERT INTO skills (name, is_approved) VALUES 
-('JavaScript', TRUE),
-('React', TRUE),
-('Node.js', TRUE),
-('Python', TRUE),
-('Java', TRUE),
-('SQL', TRUE),
-('AWS', TRUE),
-('Docker', TRUE),
-('Git', TRUE),
-('Agile', TRUE),
-('Communication', TRUE),
-('Leadership', TRUE);
+CREATE TABLE `system_areas` (
+  `id` int NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
 
--- Insert default tags
-INSERT INTO tags (name, color_hex, type) VALUES 
-('Urgent', '#FF0000', 'job'),
-('Remote-Friendly', '#00FF00', 'job'),
-('Senior-Level', '#0000FF', 'job'),
-('Top Candidate', '#FF00FF', 'candidate'),
-('Technical Expert', '#00FFFF', 'candidate'),
-('Leadership Potential', '#FFFF00', 'candidate');
+--
+-- Dumping data for table `system_areas`
+--
+
+INSERT INTO `system_areas` (`id`, `name`) VALUES
+(1, 'Banani'),
+(2, 'Gulshan 1'),
+(3, 'Gulshan 2'),
+(4, 'Dhanmondi'),
+(5, 'Mirpur'),
+(6, 'Outside Dhaka');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `system_departments`
+--
+
+CREATE TABLE `system_departments` (
+  `id` int NOT NULL,
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
+
+--
+-- Dumping data for table `system_departments`
+--
+
+INSERT INTO `system_departments` (`id`, `name`) VALUES
+(1, 'Engineering'),
+(2, 'Human Resources'),
+(3, 'Marketing'),
+(4, 'Sales');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `system_skills`
+--
+
+CREATE TABLE `system_skills` (
+  `id` int NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `is_approved` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
+
+--
+-- Dumping data for table `system_skills`
+--
+
+INSERT INTO `system_skills` (`id`, `name`, `is_approved`) VALUES
+(1, 'React.js', 1),
+(2, 'Node.js', 1),
+(3, 'MySQL', 1),
+(4, 'Figma', 1),
+(5, 'JavaScript', 1),
+(6, 'Python', 1),
+(7, 'Java', 1),
+(8, 'PHP', 1),
+(9, 'CSS', 1),
+(10, 'HTML', 1),
+(11, 'TypeScript', 1),
+(12, 'Angular', 1),
+(13, 'Vue.js', 1),
+(14, 'MongoDB', 1),
+(15, 'PostgreSQL', 1),
+(16, 'Docker', 1),
+(17, 'AWS', 1),
+(18, 'Git', 1),
+(19, 'UI/UX Design', 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+
+CREATE TABLE `users` (
+  `id` int NOT NULL,
+  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `role_id` int NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
+
+--
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`id`, `email`, `password_hash`, `role_id`, `is_active`, `created_at`, `updated_at`, `deleted_at`) VALUES
+(1, 'admin@augmex.io', '$2b$10$CLaZ59.UtVsfLICskQE7DObeLFvvOjKVQ2XKzq1ZhZS5sLwvuMj9C', 1, 1, '2025-11-28 11:53:53', '2025-11-29 08:16:32', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_oauth_providers`
+--
+
+CREATE TABLE `user_oauth_providers` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `provider` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `provider_user_id` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `access_token` text COLLATE utf8mb4_general_ci,
+  `refresh_token` text COLLATE utf8mb4_general_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_general_ci;
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `applications`
+--
+ALTER TABLE `applications`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_job_candidate` (`job_id`,`candidate_user_id`),
+  ADD KEY `idx_apps_status` (`status_id`);
+
+--
+-- Indexes for table `application_answers`
+--
+ALTER TABLE `application_answers`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `application_id` (`application_id`),
+  ADD KEY `job_form_field_id` (`job_form_field_id`);
+
+--
+-- Indexes for table `application_statuses`
+--
+ALTER TABLE `application_statuses`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `candidate_achievements`
+--
+ALTER TABLE `candidate_achievements`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `candidate_profile_id` (`candidate_profile_id`);
+
+--
+-- Indexes for table `candidate_attachments`
+--
+ALTER TABLE `candidate_attachments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `candidate_profile_id` (`candidate_profile_id`);
+
+--
+-- Indexes for table `candidate_educations`
+--
+ALTER TABLE `candidate_educations`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `candidate_profile_id` (`candidate_profile_id`),
+  ADD KEY `idx_candidates_degree` (`degree`);
+
+--
+-- Indexes for table `candidate_profiles`
+--
+ALTER TABLE `candidate_profiles`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `area_id` (`area_id`);
+
+--
+-- Indexes for table `candidate_skills`
+--
+ALTER TABLE `candidate_skills`
+  ADD PRIMARY KEY (`candidate_profile_id`,`skill_id`);
+
+--
+-- Indexes for table `job_experience_levels`
+--
+ALTER TABLE `job_experience_levels`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `job_form_fields`
+--
+ALTER TABLE `job_form_fields`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `job_id` (`job_id`);
+
+--
+-- Indexes for table `job_posts`
+--
+ALTER TABLE `job_posts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `department_id` (`department_id`),
+  ADD KEY `experience_level_id` (`experience_level_id`),
+  ADD KEY `job_type_id` (`job_type_id`),
+  ADD KEY `status_id` (`status_id`),
+  ADD KEY `idx_jobs_title_desc` (`title`,`summary`(100));
+ALTER TABLE `job_posts` ADD FULLTEXT KEY `idx_jobs_search` (`title`,`summary`);
+
+--
+-- Indexes for table `job_statuses`
+--
+ALTER TABLE `job_statuses`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `job_types`
+--
+ALTER TABLE `job_types`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `roles`
+--
+ALTER TABLE `roles`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `system_areas`
+--
+ALTER TABLE `system_areas`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `system_departments`
+--
+ALTER TABLE `system_departments`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `system_skills`
+--
+ALTER TABLE `system_skills`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `name` (`name`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `role_id` (`role_id`);
+
+--
+-- Indexes for table `user_oauth_providers`
+--
+ALTER TABLE `user_oauth_providers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_provider_user` (`provider`,`provider_user_id`),
+  ADD KEY `user_id` (`user_id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `applications`
+--
+ALTER TABLE `applications`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
+-- AUTO_INCREMENT for table `application_answers`
+--
+ALTER TABLE `application_answers`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+
+--
+-- AUTO_INCREMENT for table `application_statuses`
+--
+ALTER TABLE `application_statuses`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `candidate_achievements`
+--
+ALTER TABLE `candidate_achievements`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT for table `candidate_attachments`
+--
+ALTER TABLE `candidate_attachments`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT for table `candidate_educations`
+--
+ALTER TABLE `candidate_educations`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT for table `candidate_profiles`
+--

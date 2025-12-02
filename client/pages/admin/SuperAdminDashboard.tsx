@@ -145,15 +145,6 @@ export default function SuperAdminDashboard() {
                     <span className="text-xs text-muted-foreground">Review all applications</span>
                   </Button>
                   
-                  <Button
-                    variant="outline"
-                    className="h-auto p-4 flex flex-col items-start gap-2"
-                    onClick={() => navigate('/admin/system')}
-                  >
-                    <Settings className="h-5 w-5" />
-                    <span className="font-medium">System Settings</span>
-                    <span className="text-xs text-muted-foreground">Configure system</span>
-                  </Button>
                 </div>
               </CardContent>
             </Card>
