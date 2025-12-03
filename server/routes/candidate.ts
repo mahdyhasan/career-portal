@@ -68,6 +68,8 @@ export const handleGetProfile: RequestHandler = async (req, res) => {
     // Get skills with system_skills join
     const skillsResult = await executeQuery<CandidateSkill & { skill: Skill }>(`
       SELECT 
+        cs.id,
+        cs.candidate_profile_id,
         cs.skill_id,
         cs.proficiency,
         cs.years_experience,
@@ -133,13 +135,19 @@ export const handleGetProfile: RequestHandler = async (req, res) => {
       updated_at: profileResult.updated_at,
       user: {
         id: userId,
-        email: profileResult.email
+        email: profileResult.email,
+        role_id: 0,
+        is_active: false,
+        created_at: "",
+        updated_at: ""
       },
       area: profileResult.area_name ? {
         id: profileResult.area_id,
         name: profileResult.area_name
       } : undefined,
       skills: skillsResult.map(skill => ({
+        id: skill.id,
+        candidate_profile_id: skill.candidate_profile_id,
         skill_id: skill.skill_id,
         proficiency: skill.proficiency,
         years_experience: skill.years_experience,

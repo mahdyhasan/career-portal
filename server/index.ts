@@ -3,7 +3,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { handleLogin, handleSignup, handleSocialLogin, handleValidateToken, handleRefreshToken, handleSendOTP, handleVerifyOTP, handleSignupWithOTP } from "./routes/auth";
+import { handleLogin, handleSignup, handleSocialLogin, handleValidateToken, handleRefreshToken, handleSendOTP, handleVerifyOTP, handleSignupWithOTP, handleLogout } from "./routes/auth";
 import { handleGetJobs, handleGetJob, handleCreateJob, handleUpdateJob, handleDeleteJob, handleGetJobStats } from "./routes/jobs";
 import { 
   handleGetJobStatuses,
@@ -58,7 +58,7 @@ import {
   handleGetApplicationStats,
   handleWithdrawApplication
 } from "./routes/applications";
-import { authenticateToken, optionalAuth, requireRole } from "./middleware/auth";
+import { authenticateToken, optionalAuth, requireRole, requireAnyRole } from "./middleware/auth";
 import { requireJobManagement } from "./middleware/checkRole";
 import { testConnection } from "./config/database";
 
@@ -95,13 +95,14 @@ export function createServer() {
   app.post("/api/auth/signup-with-otp", handleSignupWithOTP);
   app.get("/api/auth/validate", authenticateToken, handleValidateToken);
   app.post("/api/auth/refresh", authenticateToken, handleRefreshToken);
+  app.post("/api/auth/logout", authenticateToken, handleLogout);
 
   // Job routes
   app.get("/api/jobs", handleGetJobs);
   app.get("/api/jobs/:id", handleGetJob);
   app.post("/api/jobs", authenticateToken, requireJobManagement, handleCreateJob);
   app.put("/api/jobs/:id", authenticateToken, handleUpdateJob);
-  app.delete("/api/jobs/:id", authenticateToken, requireRole(['SuperAdmin']), handleDeleteJob);
+  app.delete("/api/jobs/:id", authenticateToken, requireAnyRole(['SuperAdmin']), handleDeleteJob);
   app.get("/api/jobs/stats", authenticateToken, handleGetJobStats);
 
   // Candidate routes
@@ -140,22 +141,22 @@ export function createServer() {
   app.post("/api/lookup/skills", authenticateToken, handleCreateSkill);
 
   // User Management routes (SuperAdmin only)
-  app.get("/api/users", authenticateToken, requireRole(['SuperAdmin']), handleGetAllUsers);
-  app.get("/api/users/:id", authenticateToken, requireRole(['SuperAdmin']), handleGetUser);
-  app.post("/api/users", authenticateToken, requireRole(['SuperAdmin']), handleCreateNewUser);
-  app.put("/api/users/:id/status", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserStatusRoute);
-  app.put("/api/users/:id/role", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserRoleRoute);
-  app.delete("/api/users/:id", authenticateToken, requireRole(['SuperAdmin']), handleDeleteUser);
+  app.get("/api/users", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetAllUsers);
+  app.get("/api/users/:id", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetUser);
+  app.post("/api/users", authenticateToken, requireAnyRole(['SuperAdmin']), handleCreateNewUser);
+  app.put("/api/users/:id/status", authenticateToken, requireAnyRole(['SuperAdmin']), handleUpdateUserStatusRoute);
+  app.put("/api/users/:id/role", authenticateToken, requireAnyRole(['SuperAdmin']), handleUpdateUserRoleRoute);
+  app.delete("/api/users/:id", authenticateToken, requireAnyRole(['SuperAdmin']), handleDeleteUser);
 
   // Super Admin routes
-  app.get("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleGetUsers);
-  app.post("/api/admin/users", authenticateToken, requireRole(['SuperAdmin']), handleCreateUser);
-  app.put("/api/admin/users/:id/status", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserStatus);
-  app.put("/api/admin/users/:id/role", authenticateToken, requireRole(['SuperAdmin']), handleUpdateUserRole);
-  app.get("/api/admin/stats", authenticateToken, requireRole(['SuperAdmin']), handleGetSystemStats);
-  app.get("/api/admin/config", authenticateToken, requireRole(['SuperAdmin']), handleGetSystemConfig);
-  app.get("/api/admin/audit-log", authenticateToken, requireRole(['SuperAdmin']), handleGetAuditLog);
-  app.get("/api/admin/export", authenticateToken, requireRole(['SuperAdmin']), handleExportData);
+  app.get("/api/admin/users", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetUsers);
+  app.post("/api/admin/users", authenticateToken, requireAnyRole(['SuperAdmin']), handleCreateUser);
+  app.put("/api/admin/users/:id/status", authenticateToken, requireAnyRole(['SuperAdmin']), handleUpdateUserStatus);
+  app.put("/api/admin/users/:id/role", authenticateToken, requireAnyRole(['SuperAdmin']), handleUpdateUserRole);
+  app.get("/api/admin/stats", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetSystemStats);
+  app.get("/api/admin/config", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetSystemConfig);
+  app.get("/api/admin/audit-log", authenticateToken, requireAnyRole(['SuperAdmin']), handleGetAuditLog);
+  app.get("/api/admin/export", authenticateToken, requireAnyRole(['SuperAdmin']), handleExportData);
 
   return app;
 }

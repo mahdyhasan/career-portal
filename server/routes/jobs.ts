@@ -6,7 +6,7 @@ import { requireSuperAdmin } from '../middleware/checkRole';
 import { Job, CreateJobRequest, UpdateJobRequest, PaginatedResponse, JobFormField } from '@shared/api';
 
 // Get all jobs with filters and pagination
-export const handleGetJobs: RequestHandler = async (req, res) => {
+export const handleGetJobs: RequestHandler = async (req: AuthRequest, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -49,9 +49,9 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
       params.push(parseInt(req.query.job_type_id as string));
     }
 
-    if (req.query.status_id) {
-      query += ' AND j.status_id = ?';
-      params.push(parseInt(req.query.status_id as string));
+    // For public access, only show published jobs
+    if (!req.user) {
+      query += ' AND j.status_id = (SELECT id FROM job_statuses WHERE name = "Published")';
     }
 
     query += ` ORDER BY j.created_at DESC LIMIT ? OFFSET ?`;
@@ -62,32 +62,68 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
     // Fetch form fields for each job
     const jobsWithFields = await Promise.all(
       jobs.map(async (job) => {
-        const formFieldIds = fromMySQLJSON<number[]>(job.form_field_id) || 
-                           (job.form_field_id_int ? [job.form_field_id_int] : []);
-        
         let form_fields: JobFormField[] = [];
-        if (formFieldIds && formFieldIds.length > 0) {
-          const placeholders = formFieldIds.map(() => '?').join(',');
-          form_fields = await executeQuery<JobFormField>(
-            `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
-            formFieldIds
-          );
+        
+        // Handle JSON form field IDs properly
+        if (job.form_field_id) {
+          try {
+            const formFieldIds = typeof job.form_field_id === 'string' 
+              ? JSON.parse(job.form_field_id) 
+              : job.form_field_id;
+            
+            if (Array.isArray(formFieldIds) && formFieldIds.length > 0) {
+              const placeholders = formFieldIds.map(() => '?').join(',');
+              form_fields = await executeQuery<JobFormField>(
+                `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
+                formFieldIds
+              );
+            }
+          } catch (error) {
+            console.error('Error parsing form field IDs:', error);
+          }
         }
-
+        
         return {
           ...job,
           form_fields,
-          form_field_id: formFieldIds // Clean up response
+          form_field_id: undefined // Remove from response
         };
       })
     );
 
     // Get total count
-    const totalResult = await findOne<{ total: number }>(`
+    let countQuery = `
       SELECT COUNT(*) as total
       FROM job_posts j
       WHERE j.deleted_at IS NULL
-    `);
+    `;
+    const countParams: any[] = [];
+
+    if (req.query.search) {
+      countQuery += ' AND (j.title LIKE ? OR j.summary LIKE ?)';
+      countParams.push(`%${req.query.search}%`, `%${req.query.search}%`);
+    }
+
+    if (req.query.department_id) {
+      countQuery += ' AND j.department_id = ?';
+      countParams.push(parseInt(req.query.department_id as string));
+    }
+
+    if (req.query.experience_level_id) {
+      countQuery += ' AND j.experience_level_id = ?';
+      countParams.push(parseInt(req.query.experience_level_id as string));
+    }
+
+    if (req.query.job_type_id) {
+      countQuery += ' AND j.job_type_id = ?';
+      countParams.push(parseInt(req.query.job_type_id as string));
+    }
+
+    if (!req.user) {
+      countQuery += ' AND j.status_id = (SELECT id FROM job_statuses WHERE name = "Published")';
+    }
+
+    const totalResult = await findOne<{ total: number }>(countQuery, countParams);
 
     const response: PaginatedResponse<Job> = {
       data: jobsWithFields,
@@ -108,7 +144,7 @@ export const handleGetJobs: RequestHandler = async (req, res) => {
 };
 
 // Get job by ID
-export const handleGetJob: RequestHandler = async (req, res) => {
+export const handleGetJob: RequestHandler = async (req: AuthRequest, res) => {
   try {
     const jobId = parseInt(req.params.id);
     
@@ -140,17 +176,33 @@ export const handleGetJob: RequestHandler = async (req, res) => {
       });
     }
 
+    // Check if job is published for public access
+    if (!req.user && job.status_name !== 'Published') {
+      return res.status(404).json({
+        message: 'Job not found',
+        code: 'JOB_NOT_FOUND'
+      });
+    }
+
     // Fetch associated form fields
-    const formFieldIds = fromMySQLJSON<number[]>(job.form_field_id) || 
-                       (job.form_field_id_int ? [job.form_field_id_int] : []);
-    
     let form_fields: JobFormField[] = [];
-    if (formFieldIds && formFieldIds.length > 0) {
-      const placeholders = formFieldIds.map(() => '?').join(',');
-      form_fields = await executeQuery<JobFormField>(
-        `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
-        formFieldIds
-      );
+    
+    if (job.form_field_id) {
+      try {
+        const formFieldIds = typeof job.form_field_id === 'string' 
+          ? JSON.parse(job.form_field_id) 
+          : job.form_field_id;
+        
+        if (Array.isArray(formFieldIds) && formFieldIds.length > 0) {
+          const placeholders = formFieldIds.map(() => '?').join(',');
+          form_fields = await executeQuery<JobFormField>(
+            `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
+            formFieldIds
+          );
+        }
+      } catch (error) {
+        console.error('Error parsing form field IDs:', error);
+      }
     }
 
     job.form_fields = form_fields;
@@ -197,28 +249,26 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
       INSERT INTO job_posts (
         title, department_id, experience_level_id, job_type_id, status_id, 
         summary, responsibilities, requirements, benefits, 
-        salary_min, salary_max, deadline, form_field_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        salary_min, salary_max, deadline, form_field_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
     `, [
       jobData.title,
       jobData.department_id,
       jobData.experience_level_id,
       jobData.job_type_id,
-      defaultStatusId,
+      jobData.status_id || defaultStatusId,
       jobData.summary,
-      jobData.responsibilities,
-      jobData.requirements,
-      jobData.benefits,
-      jobData.salary_min,
-      jobData.salary_max,
-      jobData.deadline,
+      jobData.responsibilities || null,
+      jobData.requirements || null,
+      jobData.benefits || null,
+      jobData.salary_min || null,
+      jobData.salary_max || null,
+      jobData.deadline || null,
       formFieldJson
     ]);
 
-    const jobId = insertResult.insertId;
-
-    // Return the created job
-    const createdJob = await findOne<any>(`
+    // Fetch the newly created job with all associations
+    const newJob = await findOne<any>(`
       SELECT j.*, 
              d.name as department_name,
              el.name as experience_level_name,
@@ -230,25 +280,15 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
       LEFT JOIN job_types jt ON j.job_type_id = jt.id
       LEFT JOIN job_statuses js ON j.status_id = js.id
       WHERE j.id = ?
-    `, [jobId]);
+    `, [insertResult.insertId]);
 
-    // Fetch form fields
-    if (formFieldIds.length > 0) {
-      const placeholders = formFieldIds.map(() => '?').join(',');
-      createdJob.form_fields = await executeQuery<JobFormField>(
-        `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
-        formFieldIds
-      );
-    }
+    res.status(201).json(newJob);
 
-    delete createdJob.form_field_id_int;
-
-    res.status(201).json(createdJob);
   } catch (error) {
     console.error('Create job error:', error);
     res.status(500).json({
-      message: 'Failed to create job',
-      code: 'CREATE_JOB_FAILED'
+      message: error instanceof Error ? error.message : 'Failed to create job',
+      code: 'JOB_CREATION_FAILED'
     });
   }
 };
@@ -256,15 +296,9 @@ export const handleCreateJob: RequestHandler = async (req: AuthRequest, res) => 
 // Update job
 export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
     const jobId = parseInt(req.params.id);
-    const updateData: UpdateJobRequest = req.body;
+    const jobData: Partial<CreateJobRequest> = req.body;
+    const user = req.user;
 
     if (!jobId) {
       return res.status(400).json({
@@ -273,11 +307,12 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       });
     }
 
-    // Check if job exists
+    // Check if job exists and user has permission
     const existingJob = await findOne<any>(`
-      SELECT id, status_id
-      FROM job_posts
-      WHERE id = ? AND deleted_at IS NULL
+      SELECT j.*, u.role_id
+      FROM job_posts j
+      JOIN users u ON j.created_by = u.id
+      WHERE j.id = ? AND j.deleted_at IS NULL
     `, [jobId]);
 
     if (!existingJob) {
@@ -287,70 +322,36 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       });
     }
 
-    // Check permissions (SuperAdmin only)
-    if (req.user.role?.name !== 'SuperAdmin') {
+    // Check permissions - only SuperAdmin or the job creator can update
+    if (user?.role?.name !== 'SuperAdmin' && existingJob.created_by !== user?.id) {
       return res.status(403).json({
-        message: 'Only SuperAdmin can edit jobs',
+        message: 'Access denied',
         code: 'INSUFFICIENT_PERMISSIONS'
       });
     }
 
     // Build dynamic update query
-    const updateFields = [];
-    const updateParams = [];
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
 
-    if (updateData.title !== undefined) {
-      updateFields.push('title = ?');
-      updateParams.push(updateData.title);
-    }
-    if (updateData.summary !== undefined) {
-      updateFields.push('summary = ?');
-      updateParams.push(updateData.summary);
-    }
-    if (updateData.responsibilities !== undefined) {
-      updateFields.push('responsibilities = ?');
-      updateParams.push(updateData.responsibilities);
-    }
-    if (updateData.requirements !== undefined) {
-      updateFields.push('requirements = ?');
-      updateParams.push(updateData.requirements);
-    }
-    if (updateData.benefits !== undefined) {
-      updateFields.push('benefits = ?');
-      updateParams.push(updateData.benefits);
-    }
-    if (updateData.salary_min !== undefined) {
-      updateFields.push('salary_min = ?');
-      updateParams.push(updateData.salary_min);
-    }
-    if (updateData.salary_max !== undefined) {
-      updateFields.push('salary_max = ?');
-      updateParams.push(updateData.salary_max);
-    }
-    if (updateData.deadline !== undefined) {
-      updateFields.push('deadline = ?');
-      updateParams.push(updateData.deadline);
-    }
-    if (updateData.status_id !== undefined) {
-      updateFields.push('status_id = ?');
-      updateParams.push(updateData.status_id);
-    }
-    if (updateData.department_id !== undefined) {
-      updateFields.push('department_id = ?');
-      updateParams.push(updateData.department_id);
-    }
-    if (updateData.experience_level_id !== undefined) {
-      updateFields.push('experience_level_id = ?');
-      updateParams.push(updateData.experience_level_id);
-    }
-    if (updateData.job_type_id !== undefined) {
-      updateFields.push('job_type_id = ?');
-      updateParams.push(updateData.job_type_id);
-    }
-    if (updateData.form_field_ids !== undefined) {
-      const formFieldJson = updateData.form_field_ids.length > 0 ? toMySQLJSON(updateData.form_field_ids) : null;
+    const allowedFields = [
+      'title', 'department_id', 'experience_level_id', 'job_type_id',
+      'status_id', 'summary', 'responsibilities', 'requirements',
+      'benefits', 'salary_min', 'salary_max', 'deadline'
+    ];
+
+    allowedFields.forEach(field => {
+      if (jobData[field as keyof typeof jobData] !== undefined) {
+        updateFields.push(`${field} = ?`);
+        updateValues.push(jobData[field as keyof typeof jobData]);
+      }
+    });
+
+    // Handle form field IDs
+    if (jobData.form_field_ids) {
+      const formFieldJson = jobData.form_field_ids.length > 0 ? toMySQLJSON(jobData.form_field_ids) : null;
       updateFields.push('form_field_id = ?');
-      updateParams.push(formFieldJson);
+      updateValues.push(formFieldJson);
     }
 
     if (updateFields.length === 0) {
@@ -360,16 +361,18 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       });
     }
 
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    updateParams.push(jobId);
+    updateFields.push('updated_at = NOW()');
+    updateValues.push(jobId);
 
-    await executeQuery(`
-      UPDATE job_posts
+    const updateQuery = `
+      UPDATE job_posts 
       SET ${updateFields.join(', ')}
       WHERE id = ?
-    `, updateParams);
+    `;
 
-    // Return updated job
+    await executeSingleQuery(updateQuery, updateValues);
+
+    // Fetch updated job
     const updatedJob = await findOne<any>(`
       SELECT j.*, 
              d.name as department_name,
@@ -384,40 +387,20 @@ export const handleUpdateJob: RequestHandler = async (req: AuthRequest, res) => 
       WHERE j.id = ?
     `, [jobId]);
 
-    // Fetch form fields
-    const formFieldIds = fromMySQLJSON<number[]>(updatedJob.form_field_id) || 
-                       (updatedJob.form_field_id_int ? [updatedJob.form_field_id_int] : []);
-    
-    if (formFieldIds && formFieldIds.length > 0) {
-      const placeholders = formFieldIds.map(() => '?').join(',');
-      updatedJob.form_fields = await executeQuery<JobFormField>(
-        `SELECT id, input_type, label FROM job_form_fields WHERE id IN (${placeholders})`,
-        formFieldIds
-      );
-    }
-
-    delete updatedJob.form_field_id_int;
-
     res.json(updatedJob);
+
   } catch (error) {
     console.error('Update job error:', error);
     res.status(500).json({
-      message: 'Failed to update job',
-      code: 'UPDATE_JOB_FAILED'
+      message: error instanceof Error ? error.message : 'Failed to update job',
+      code: 'JOB_UPDATE_FAILED'
     });
   }
 };
 
-// Delete job (soft delete)
+// Delete job
 export const handleDeleteJob: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
     const jobId = parseInt(req.params.id);
 
     if (!jobId) {
@@ -427,26 +410,29 @@ export const handleDeleteJob: RequestHandler = async (req: AuthRequest, res) => 
       });
     }
 
-    // Only SuperAdmin can delete jobs
-    if (req.user.role?.name !== 'SuperAdmin') {
-      return res.status(403).json({
-        message: 'Only SuperAdmin can delete jobs',
-        code: 'INSUFFICIENT_PERMISSIONS'
+    // Soft delete the job
+    const result = await executeSingleQuery(`
+      UPDATE job_posts 
+      SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id = ? AND deleted_at IS NULL
+    `, [jobId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        message: 'Job not found',
+        code: 'JOB_NOT_FOUND'
       });
     }
 
-    await executeQuery(`
-      UPDATE job_posts
-      SET deleted_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [jobId]);
+    res.json({
+      message: 'Job deleted successfully'
+    });
 
-    res.status(204).send();
   } catch (error) {
     console.error('Delete job error:', error);
     res.status(500).json({
-      message: 'Failed to delete job',
-      code: 'DELETE_JOB_FAILED'
+      message: error instanceof Error ? error.message : 'Failed to delete job',
+      code: 'JOB_DELETE_FAILED'
     });
   }
 };
@@ -454,38 +440,63 @@ export const handleDeleteJob: RequestHandler = async (req: AuthRequest, res) => 
 // Get job statistics
 export const handleGetJobStats: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    // SuperAdmin sees all stats, others see nothing for now
-    if (req.user.role?.name !== 'SuperAdmin') {
-      return res.status(403).json({
-        message: 'Only SuperAdmin can view stats',
-        code: 'INSUFFICIENT_PERMISSIONS'
-      });
-    }
-
-    const stats = await findOne<any>(`
+    const user = req.user;
+    
+    // Base query for job statistics
+    let baseQuery = `
       SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN js.name = 'Published' THEN 1 ELSE 0 END) as published,
         SUM(CASE WHEN js.name = 'Draft' THEN 1 ELSE 0 END) as draft,
-        SUM(CASE WHEN js.name = 'Closed' THEN 1 ELSE 0 END) as closed
+        SUM(CASE WHEN js.name = 'Closed' THEN 1 ELSE 0 END) as closed,
+        SUM(CASE WHEN j.deadline < CURDATE() AND js.name = 'Published' THEN 1 ELSE 0 END) as expired
       FROM job_posts j
       LEFT JOIN job_statuses js ON j.status_id = js.id
       WHERE j.deleted_at IS NULL
-    `);
+    `;
 
-    res.json(stats || { total: 0, published: 0, draft: 0, closed: 0 });
+    // If not SuperAdmin, filter by user's jobs
+    if (user?.role?.name !== 'SuperAdmin') {
+      baseQuery += ` AND j.created_by = ${user?.id}`;
+    }
+
+    const stats = await findOne<any>(baseQuery);
+
+    // Get applications per job
+    const applicationsQuery = `
+      SELECT 
+        j.id,
+        j.title,
+        COUNT(a.id) as application_count
+      FROM job_posts j
+      LEFT JOIN applications a ON j.id = a.job_id AND a.deleted_at IS NULL
+      WHERE j.deleted_at IS NULL
+      ${user?.role?.name !== 'SuperAdmin' ? `AND j.created_by = ${user?.id}` : ''}
+      GROUP BY j.id, j.title
+      ORDER BY application_count DESC
+      LIMIT 10
+    `;
+
+    const jobApplications = await executeQuery<any>(applicationsQuery);
+
+    res.json({
+      total: stats?.total || 0,
+      published: stats?.published || 0,
+      draft: stats?.draft || 0,
+      closed: stats?.closed || 0,
+      expired: stats?.expired || 0,
+      topJobs: jobApplications.map(job => ({
+        id: job.id,
+        title: job.title,
+        applicationCount: job.application_count
+      }))
+    });
+
   } catch (error) {
     console.error('Get job stats error:', error);
     res.status(500).json({
       message: 'Failed to fetch job statistics',
-      code: 'GET_STATS_FAILED'
+      code: 'STATS_FETCH_FAILED'
     });
   }
 };

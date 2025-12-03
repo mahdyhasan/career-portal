@@ -48,11 +48,11 @@ export const handleSignup: RequestHandler = async (req, res) => {
       });
     }
 
-    // HARD-CODE ROLE TO CANDIDATE - SECURITY FIX
+    // Default role to Candidate for public signup
     const signupData: SignupRequest = {
       email,
       password,
-      role: 'Candidate', // Always set to Candidate
+      role: 'Candidate',
       firstName,
       lastName
     };
@@ -72,7 +72,7 @@ export const handleSignup: RequestHandler = async (req, res) => {
 // Social login endpoint
 export const handleSocialLogin: RequestHandler = async (req, res) => {
   try {
-    const { provider, token, profile } = req.body;
+    const { provider, token } = req.body;
     
     if (!provider || !token) {
       return res.status(400).json({
@@ -81,87 +81,68 @@ export const handleSocialLogin: RequestHandler = async (req, res) => {
       });
     }
 
-    if (provider !== 'google' && provider !== 'linkedin') {
-      return res.status(400).json({
-        message: 'Invalid provider',
-        code: 'VALIDATION_ERROR'
-      });
-    }
-
-    // For now, we'll just extract email from the token
-    // In production, you'd verify the token with the provider
-    const email = 'user@example.com'; // This should come from verified token
-    
-    const result = await AuthService.socialLogin(
-      email,
-      provider,
-      token,
-      profile
-    );
-    
-    res.json(result);
+    // Placeholder for social login implementation
+    res.status(501).json({
+      message: 'Social login not yet implemented',
+      code: 'NOT_IMPLEMENTED'
+    });
   } catch (error) {
     console.error('Social login error:', error);
-    res.status(401).json({
-      message: error instanceof Error ? error.message : 'Social login failed',
+    res.status(500).json({
+      message: 'Social login failed',
       code: 'SOCIAL_LOGIN_FAILED'
     });
   }
 };
 
-// Validate token endpoint
+// Token validation endpoint
 export const handleValidateToken: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: 'Invalid token',
-        code: 'INVALID_TOKEN'
-      });
+    // The authenticateToken middleware already validated the token
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ valid: false, message: 'Invalid token' });
     }
-
-    res.json({
-      valid: true,
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role
-      }
+    
+    // Fetch fresh user data
+    const freshUser = await AuthService.findUserById(user.id);
+    if (!freshUser) {
+      return res.status(401).json({ valid: false, message: 'User not found' });
+    }
+    
+    res.json({ 
+      valid: true, 
+      user: freshUser 
     });
   } catch (error) {
     console.error('Token validation error:', error);
-    res.status(401).json({
-      message: 'Token validation failed',
-      code: 'VALIDATION_FAILED'
-    });
+    res.status(401).json({ valid: false, message: 'Token validation failed' });
   }
 };
 
-// Refresh token endpoint
+// Token refresh endpoint
 export const handleRefreshToken: RequestHandler = async (req: AuthRequest, res) => {
   try {
-    if (!req.user) {
+    const user = req.user;
+    if (!user) {
       return res.status(401).json({
         message: 'Invalid token',
-        code: 'INVALID_TOKEN'
+        code: 'TOKEN_INVALID'
       });
     }
 
     // Generate new token
-    const newToken = AuthService.generateToken(req.user);
+    const newToken = AuthService.generateToken(user);
     
     res.json({
       token: newToken,
-      user: {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role?.name
-      }
+      user: user
     });
   } catch (error) {
     console.error('Token refresh error:', error);
     res.status(500).json({
       message: 'Token refresh failed',
-      code: 'REFRESH_FAILED'
+      code: 'TOKEN_REFRESH_FAILED'
     });
   }
 };
@@ -183,7 +164,7 @@ export const handleSendOTP: RequestHandler = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Send OTP error:', error);
-    res.status(400).json({
+    res.status(500).json({
       message: error instanceof Error ? error.message : 'Failed to send OTP',
       code: 'OTP_SEND_FAILED'
     });
@@ -247,5 +228,25 @@ export const handleSignupWithOTP: RequestHandler = async (req, res) => {
       message: error instanceof Error ? error.message : 'Signup failed',
       code: 'SIGNUP_FAILED'
     });
+  }
+};
+
+// Logout endpoint
+export const handleLogout: RequestHandler = async (req: AuthRequest, res) => {
+  try {
+    // In a proper implementation, you might:
+    // 1. Blacklist the token in a database
+    // 2. Clear session data
+    // 3. Log the logout event
+    
+    const user = req.user;
+    if (user) {
+      console.log(`User ${user.email} logged out`);
+    }
+    
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Logout failed' });
   }
 };

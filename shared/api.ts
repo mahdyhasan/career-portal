@@ -10,7 +10,7 @@
 
 export interface Role {
   id: number;
-  name: 'SuperAdmin' | 'HiringManager' | 'Candidate';
+  name: 'SuperAdmin' | 'HiringManager' | 'Candidate' | 'Admin'; // Added Admin for UI compatibility
 }
 
 export interface JobStatus {
@@ -67,6 +67,7 @@ export interface User {
   first_name?: string;
   last_name?: string;
   phone?: string;
+  full_name?: string; // Computed from first_name + last_name
   // Joined relationship
   role?: Role;
 }
@@ -87,6 +88,21 @@ export interface CandidateProfile {
   updated_at: string;
   deleted_at?: string;
   
+  // Additional properties for UI compatibility
+  first_name?: string;
+  last_name?: string;
+  bio?: string;
+  country?: {
+    id: number;
+    name: string;
+  };
+  city?: {
+    id: number;
+    name: string;
+  };
+  country_id?: number; // For UI compatibility
+  city_id?: number; // For UI compatibility
+  
   // Joined relationships
   user?: User;
   area?: Area;
@@ -96,6 +112,12 @@ export interface CandidateProfile {
   attachments?: CandidateAttachment[];
 }
 
+// Add missing UI compatibility properties
+export interface ApplicationWithCandidateInfo extends Application {
+  candidateName?: string;
+  candidateEmail?: string;
+}
+
 // ==========================================
 // 3. JOBS & FORM BUILDER TYPES
 // ==========================================
@@ -103,8 +125,18 @@ export interface CandidateProfile {
 // Global form field (from job_form_fields table)
 export interface JobFormField {
   id: number;
-  input_type: 'checkbox' | 'number' | 'text' | 'textarea';
+  input_type: 'checkbox' | 'number' | 'text' | 'textarea' | 'select' | 'radio' | 'email' | 'date' | 'file';
+  inputType?: 'checkbox' | 'number' | 'text' | 'textarea' | 'select' | 'radio' | 'email' | 'date' | 'file'; // For UI compatibility
   label: string;
+  name?: string; // Field name for forms
+  placeholder?: string;
+  is_required?: boolean;
+  required?: boolean; // For UI compatibility
+  validation_rules?: any;
+  options?: any;
+  sort_order?: number;
+  order?: number; // For UI compatibility
+  type?: string; // For UI compatibility
 }
 
 // Job post with JSON field for form field IDs
@@ -127,6 +159,17 @@ export interface Job {
   updated_at: string;
   deleted_at?: string;
   
+  // Additional properties for UI compatibility
+  location?: string;
+  location_text?: string;
+  salary_range?: string;
+  description?: string;
+  company?: {
+    id: number;
+    name: string;
+  };
+  isActive?: boolean; // For UI compatibility
+  
   // Joined relationships
   department?: Department;
   experience_level?: ExperienceLevel;
@@ -140,10 +183,14 @@ export interface Job {
 // ==========================================
 
 export interface CandidateSkill {
+  id: number;
   candidate_profile_id: number;
   skill_id: number;
   proficiency?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
   years_experience?: number;
+  // Additional properties for UI compatibility
+  skill_name?: string;
+  is_approved?: boolean;
   // Joined relationship
   skill?: Skill;
 }
@@ -165,6 +212,7 @@ export interface CandidateAchievement {
   description?: string;
   url?: string;
   created_at: string;
+  issue_date?: string; // For UI compatibility
 }
 
 export interface CandidateAttachment {
@@ -189,15 +237,35 @@ export interface Application {
   updated_at: string;
   deleted_at?: string;
   
-  // Computed properties for UI
-  candidateName?: string;
-  candidateEmail?: string;
+  // Additional properties for UI compatibility
+  history?: any[];
   
   // Joined relationships
   job?: Job;
   candidate?: User;
   status?: ApplicationStatus;
   answers?: ApplicationAnswer[];
+  candidate_profile?: {
+    skills: Array<{
+      skill: string;
+      proficiency?: string;
+      years_experience?: number;
+    }>;
+    education: Array<{
+      id: number;
+      institute_name: string;
+      degree: string;
+      major_subject: string;
+      graduation_year?: number;
+      result?: string;
+    }>;
+    attachments: Array<{
+      id: number;
+      file_type: string;
+      file_url: string;
+      uploaded_at: string;
+    }>;
+  };
 }
 
 export interface ApplicationAnswer {
@@ -241,6 +309,8 @@ export interface CandidateProfileUpdateRequest {
   portfolio_url?: string;
   exp_salary_min?: string;
   exp_salary_max?: string;
+  first_name?: string; // For UI compatibility
+  last_name?: string; // For UI compatibility
 }
 
 export interface CandidateEducationRequest {
@@ -255,6 +325,7 @@ export interface CandidateAchievementRequest {
   title: string;
   description?: string;
   url?: string;
+  achievement_type_id?: number; // For UI compatibility
 }
 
 export interface CandidateSkillRequest {
@@ -265,6 +336,7 @@ export interface CandidateSkillRequest {
 
 // Job Management
 export interface CreateJobRequest {
+  status_id: number;
   title: string;
   department_id: number;
   experience_level_id: number;
@@ -329,6 +401,9 @@ export interface JobFilters {
   experience_level_id?: number;
   job_type_id?: number;
   status_id?: number;
+  sort?: string; // For UI compatibility
+  salaryMin?: string; // For UI compatibility
+  salaryMax?: string; // For UI compatibility
 }
 
 export interface ApplicationFilters {
@@ -352,6 +427,48 @@ export interface PaginatedResponse<T> {
 // API Response Types
 export interface DemoResponse {
   message: string;
+}
+
+// Additional response types for UI compatibility
+export interface JobsListResponse extends PaginatedResponse<Job> {}
+export interface ApplicationsListResponse extends PaginatedResponse<Application> {}
+
+// Additional missing types for UI compatibility
+export interface FileMetadata {
+  id: number;
+  name: string;
+  type: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  canPreview: boolean;
+  downloadUrl: string;
+  previewUrl?: string;
+  checksum?: string;
+  lastModified?: string;
+}
+
+export interface StatsResponse {
+  statusCounts: Array<{
+    status: string;
+    statusId: number;
+    count: number;
+  }>;
+  recentApplications: Array<{
+    id: number;
+    jobTitle: string;
+    candidateName: string;
+    status: string;
+    appliedAt: string;
+  }>;
+}
+
+export interface LookupTableResponse {
+  departments: Department[];
+  jobTypes: JobType[];
+  experienceLevels: ExperienceLevel[];
+  applicationStatuses: ApplicationStatus[];
+  skills: Skill[];
 }
 
 // Error Response

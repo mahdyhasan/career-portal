@@ -60,6 +60,19 @@ export async function executeSingleQuery(
   }
 }
 
+export async function executeInsert(
+  query: string, 
+  params: any[] = []
+): Promise<mysql.ResultSetHeader> {
+  try {
+    const [result] = await pool.execute(query, params);
+    return result as mysql.ResultSetHeader;
+  } catch (error) {
+    console.error('Database insert error:', error);
+    throw error;
+  }
+}
+
 export async function findOne<T = any>(
   query: string, 
   params: any[] = []
